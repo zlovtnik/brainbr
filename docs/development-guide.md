@@ -16,10 +16,16 @@ This guide turns the technical specification into an implementation-ready plan w
 
 - Features:
   - Platform bootstrap, baseline schema/migrations, tenant keys and RLS foundation.
+  - JWT-backed tenant context with server-side validation: never trust client-supplied `tenant_id` alone; validate `sub` <-> `company_id` association via trusted server lookup, or derive tenant from trusted host/subdomain mapping or mTLS identity before authorization.
+  - Tenant-scoped inventory CRUD (`POST/GET list/GET by id/PUT/DELETE soft`) over composite key `(sku_id, company_id)`.
+  - Request ID propagation and tenant-safe structured logging context (`request_id`, `company_id`).
 - Acceptance criteria:
-  - Environment boots locally, migrations apply, tenant-scoped CRUD paths and baseline observability are working.
+  - Environment boots locally and migrations apply.
+  - Inventory CRUD paths enforce tenant isolation and soft delete semantics.
+  - DB session tenant context is set per request (`app.current_company_id`) with RLS active.
+  - Baseline observability exposes actuator health/info and request correlation headers.
 - Dependencies:
-  - Docker runtime, PostgreSQL + Redis, Flyway baseline, environment secrets.
+  - Docker runtime, PostgreSQL + Redis, Flyway baseline, environment secrets, JWT issuer/JWKS configuration.
 
 ### Phase 2 - Ingestion and core audit pipeline
 
