@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiscalbrain-br/docs/schemas/rag-output-v1.schema.json",
+  "title": "RagOutputV1",
+  "type": "object",
+  "required": ["reform_taxes", "audit_confidence", "llm_model_used", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "reform_taxes": {
+      "$ref": "./reform-taxes-v1.schema.json"
+    },
+    "audit_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "llm_model_used": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "object",
+      "required": ["law_ref", "content", "source_url"],
+      "additionalProperties": false,
+      "properties": {
+        "law_ref": { "type": "string", "minLength": 1 },
+        "content": { "type": "string", "minLength": 1 },
+        "source_url": { "type": "string", "format": "uri" }
+      }
+    }
+  }
+}

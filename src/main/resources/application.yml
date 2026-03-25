@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: fiscalbrain-br
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/fiscalbrain}
+    username: ${DB_USER:fiscal_user}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:0}
+      password: ${REDIS_PASSWORD:}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  models:
+    embedding: ${EMBEDDING_MODEL:text-embedding-3-small}
+    llm: ${LLM_MODEL:gpt-4o}
+  worker:
+    heartbeat-interval-ms: ${WORKER_HEARTBEAT_INTERVAL_MS:60000}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: worker
+  main:
+    web-application-type: none

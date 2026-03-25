@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiscalbrain-br/docs/schemas/legacy-taxes-v1.schema.json",
+  "title": "LegacyTaxesV1",
+  "type": "object",
+  "required": ["icms", "pis", "cofins", "iss"],
+  "additionalProperties": false,
+  "properties": {
+    "icms": { "type": "number", "minimum": 0 },
+    "pis": { "type": "number", "minimum": 0 },
+    "cofins": { "type": "number", "minimum": 0 },
+    "iss": { "type": "number", "minimum": 0 },
+    "st": { "type": "number", "minimum": 0 },
+    "st_mva": { "type": "number", "minimum": 0 },
+    "ipi": { "type": "number", "minimum": 0 },
+    "fcp": { "type": "number", "minimum": 0 }
+  }
+}
