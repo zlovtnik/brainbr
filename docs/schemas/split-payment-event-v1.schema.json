@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiscalbrain-br.example/schemas/split-payment-event-v1.schema.json",
+  "title": "SplitPaymentEventV1",
+  "type": "object",
+  "required": [
+    "sku_id",
+    "event_type",
+    "amount",
+    "currency",
+    "idempotency_key",
+    "timestamp",
+    "integration_status",
+    "integration_metadata",
+    "event_payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "sku_id": { "type": "string", "minLength": 1 },
+    "event_type": { "type": "string", "minLength": 1 },
+    "amount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Amount in smallest currency unit (centavos)."
+    },
+    "currency": {
+      "type": "string",
+      "enum": ["BRL"]
+    },
+    "idempotency_key": { "type": "string", "minLength": 8, "maxLength": 128 },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "integration_status": { "type": "string", "minLength": 1 },
+    "integration_metadata": { "type": "object" },
+    "event_payload": { "type": "object" }
+  }
+}
