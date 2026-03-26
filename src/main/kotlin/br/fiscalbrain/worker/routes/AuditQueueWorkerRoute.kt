@@ -19,6 +19,7 @@ class AuditQueueWorkerRoute(
         onException(Exception::class.java)
             .maximumRedeliveries(3)
             .redeliveryDelay(1000)
+            .useExponentialBackOff()
             .backOffMultiplier(2.0)
             .retryAttemptedLogLevel(LoggingLevel.WARN)
             .handled(true)

@@ -72,3 +72,7 @@ spring:
       on-profile: worker
   main:
     web-application-type: none
+
+camel:
+  springboot:
+    main-run-controller: true

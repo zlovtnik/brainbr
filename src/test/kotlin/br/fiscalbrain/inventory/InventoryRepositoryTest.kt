@@ -16,7 +16,17 @@ class InventoryRepositoryTest {
     @Test
     fun `list should reject non-positive page`() {
         assertThrows<IllegalArgumentException> {
-            repository.list(UUID.randomUUID(), 0, 50, false)
+            repository.list(
+                UUID.randomUUID(),
+                InventoryListFilters.from(
+                    page = 0,
+                    limit = 50,
+                    includeInactive = false,
+                    query = null,
+                    sortBy = null,
+                    sortOrder = null
+                )
+            )
         }
         verifyNoInteractions(jdbcTemplate)
     }
@@ -24,7 +34,17 @@ class InventoryRepositoryTest {
     @Test
     fun `list should reject non-positive limit`() {
         assertThrows<IllegalArgumentException> {
-            repository.list(UUID.randomUUID(), 1, 0, false)
+            repository.list(
+                UUID.randomUUID(),
+                InventoryListFilters.from(
+                    page = 1,
+                    limit = 0,
+                    includeInactive = false,
+                    query = null,
+                    sortBy = null,
+                    sortOrder = null
+                )
+            )
         }
         verifyNoInteractions(jdbcTemplate)
     }

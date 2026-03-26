@@ -76,7 +76,7 @@ class SplitPaymentRepository(
         require(page >= 1) { "Invalid pagination: page must be >= 1, got page=$page" }
         require(limit > 0) { "Invalid pagination: limit must be > 0, got limit=$limit" }
 
-        val offset = (page - 1) * limit
+        val offset = (page - 1L) * limit.toLong()
         val args = mutableListOf<Any>(companyId)
 
         val sql = StringBuilder(

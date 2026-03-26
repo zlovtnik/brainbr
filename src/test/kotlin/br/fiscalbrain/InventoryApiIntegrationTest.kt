@@ -1,6 +1,7 @@
 package br.fiscalbrain
 
 import br.fiscalbrain.pipeline.EmbeddingProvider
+import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -205,6 +206,57 @@ class InventoryApiIntegrationTest {
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.is_active").value(false))
+    }
+
+    @Test
+    fun `should support filtered and sorted inventory listing`() {
+        mockMvc.perform(
+            post("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(writeRequestPayload("SKU-200", "Produto Beta"))
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(
+            post("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(writeRequestPayload("SKU-100", "Produto Alfa"))
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(
+            get("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .queryParam("query", "alfa")
+                .queryParam("sort_by", "sku_id")
+                .queryParam("sort_order", "asc")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_count").value(1))
+            .andExpect(jsonPath("$.items[0].sku_id").value("SKU-100"))
+            .andExpect(jsonPath("$.items[0].description").value("Produto Alfa"))
+
+        mockMvc.perform(
+            get("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .queryParam("sort_by", "sku_id")
+                .queryParam("sort_order", "asc")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.items[0].sku_id").value("SKU-100"))
+            .andExpect(jsonPath("$.items[1].sku_id").value("SKU-200"))
+    }
+
+    @Test
+    fun `should reject invalid inventory sort params`() {
+        mockMvc.perform(
+            get("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .queryParam("sort_by", "description")
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error_code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.message").value(containsString("Invalid sort_by value")))
     }
 
     @Test

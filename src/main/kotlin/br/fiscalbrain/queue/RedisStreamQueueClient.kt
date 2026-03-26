@@ -2,7 +2,6 @@ package br.fiscalbrain.queue
 
 import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.data.redis.connection.stream.Consumer
 import org.springframework.data.redis.connection.stream.MapRecord
 import org.springframework.data.redis.connection.stream.ReadOffset
@@ -11,12 +10,9 @@ import org.springframework.data.redis.connection.stream.StreamReadOptions
 import org.springframework.data.redis.connection.stream.StringRecord
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.StreamOperations
-import org.springframework.stereotype.Component
 import java.time.Duration
 import java.util.UUID
 
-@Component
-@ConditionalOnBean(StringRedisTemplate::class)
 class RedisStreamQueueClient(
     private val redisTemplate: StringRedisTemplate,
     @Value("\${app.queue.stream.ingestion:queue_ingestion}") private val ingestionStream: String,
@@ -80,9 +76,17 @@ class RedisStreamQueueClient(
 
     private fun createGroup(stream: String, group: String) {
         try {
-            streamOps().createGroup(stream, ReadOffset.from("0"), group)
+            redisTemplate.execute { connection ->
+                connection.streamCommands().xGroupCreate(
+                    stream.toByteArray(),
+                    group,
+                    ReadOffset.from("0"),
+                    true
+                )
+            }
         } catch (e: Exception) {
-            if (e.message?.contains("BUSYGROUP") != true) {
+            val message = e.cause?.message ?: e.message
+            if (message?.contains("BUSYGROUP") != true) {
                 throw e
             }
             // Consumer group already exists - this is expected

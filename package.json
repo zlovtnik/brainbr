@@ -1,0 +1,15 @@
+{
+  "name": "brainbr-workspace",
+  "private": true,
+  "packageManager": "bun@1.3.11",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "bun --filter web dev",
+    "check": "bun --filter web check",
+    "lint": "bun --filter web lint",
+    "test": "bun --filter web test",
+    "test:e2e": "bun --filter web test:e2e"
+  }
+}

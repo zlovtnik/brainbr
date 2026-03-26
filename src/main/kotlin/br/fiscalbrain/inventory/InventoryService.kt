@@ -30,17 +30,17 @@ class InventoryService(
     }
 
     @Transactional(readOnly = true)
-    fun list(page: Int, limit: Int, includeInactive: Boolean): InventoryListResponse {
+    fun list(filters: InventoryListFilters): InventoryListResponse {
         val companyId = tenantDbSessionService.requireCompanyId()
         tenantDbSessionService.apply(companyId)
-        val items = inventoryRepository.list(companyId, page, limit, includeInactive).map { it.toResponse() }
-        val totalCount = inventoryRepository.count(companyId, includeInactive)
+        val items = inventoryRepository.list(companyId, filters).map { it.toResponse() }
+        val totalCount = inventoryRepository.count(companyId, filters)
         return InventoryListResponse(
             items = items,
             totalCount = totalCount,
-            page = page,
-            limit = limit,
-            hasMore = (page.toLong() * limit) < totalCount
+            page = filters.page,
+            limit = filters.limit,
+            hasMore = (filters.page.toLong() * filters.limit) < totalCount
         )
     }
 

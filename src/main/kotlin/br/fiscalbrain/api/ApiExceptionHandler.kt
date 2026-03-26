@@ -4,6 +4,7 @@ import br.fiscalbrain.audit.AuditNotFoundException
 import br.fiscalbrain.audit.AuditProcessingException
 import br.fiscalbrain.core.security.ForbiddenOperationException
 import br.fiscalbrain.core.web.ErrorResponse
+import br.fiscalbrain.core.web.InvalidRequestException
 import br.fiscalbrain.core.web.RequestContextKeys
 import br.fiscalbrain.inventory.InventoryNotFoundException
 import br.fiscalbrain.pipeline.IngestionException
@@ -48,7 +49,7 @@ class ApiExceptionHandler {
             request = request
         )
 
-    @ExceptionHandler(IllegalArgumentException::class, SchemaValidationException::class, IngestionException::class)
+    @ExceptionHandler(InvalidRequestException::class, SchemaValidationException::class, IngestionException::class)
     fun handleDomainValidation(ex: Exception, request: HttpServletRequest): ResponseEntity<ErrorResponse> =
         buildErrorResponse(
             status = HttpStatus.BAD_REQUEST,

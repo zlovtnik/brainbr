@@ -1,6 +1,7 @@
 package br.fiscalbrain.api
 
 import br.fiscalbrain.core.security.ForbiddenOperationException
+import br.fiscalbrain.core.web.InvalidRequestException
 import br.fiscalbrain.core.web.RequestContextKeys
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -32,5 +33,18 @@ class ApiExceptionHandlerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.statusCode)
         assertEquals("INTERNAL_SERVER_ERROR", response.body?.errorCode)
         assertEquals("req-2", response.body?.requestId)
+    }
+
+    @Test
+    fun `should map InvalidRequestException to bad request response`() {
+        val request = MockHttpServletRequest("GET", "/api/v1/audit/explain/artifact/runs/invalid")
+        request.setAttribute(RequestContextKeys.REQUEST_ID_ATTR, "req-3")
+
+        val response = handler.handleDomainValidation(InvalidRequestException("Invalid run_id format"), request)
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        assertEquals("BAD_REQUEST", response.body?.errorCode)
+        assertEquals("Invalid run_id format", response.body?.message)
+        assertEquals("req-3", response.body?.requestId)
     }
 }
