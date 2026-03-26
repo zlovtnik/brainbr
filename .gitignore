@@ -1,8 +1,14 @@
 .gradle/
 build/
 out/
+bin/
 *.iml
 .idea/
 .DS_Store
 .env
-
+node_modules/
+coverage/
+playwright-report/
+test-results/
+.env.*
+!.env.example

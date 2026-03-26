@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: fiscalbrain
       POSTGRES_USER: ${DB_USER:-fiscal_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_in_production}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql

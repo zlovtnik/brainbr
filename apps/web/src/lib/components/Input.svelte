@@ -1,0 +1,93 @@
+<script lang="ts">
+	interface Props {
+		id: string;
+		name: string;
+		label: string;
+		value?: string;
+		type?: string;
+		error?: string;
+		hint?: string;
+		required?: boolean;
+		placeholder?: string;
+		readonly?: boolean;
+	}
+
+	let {
+		id,
+		name,
+		label,
+		value = '',
+		type = 'text',
+		error,
+		hint,
+		required = false,
+		placeholder,
+		readonly = false
+	}: Props = $props();
+
+	let describedBy = $derived(
+		[hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(' ') || undefined
+	);
+</script>
+
+<label class="field" for={id}>
+	<span class="field__label">{label}</span>
+	{#if hint}
+		<span class="field__hint" id={`${id}-hint`}>{hint}</span>
+	{/if}
+	<input
+		class:field__input--error={Boolean(error)}
+		class="field__input"
+		{id}
+		{name}
+		{type}
+		{value}
+		{placeholder}
+		{readonly}
+		{required}
+		aria-invalid={Boolean(error)}
+		aria-describedby={describedBy}
+	/>
+	{#if error}
+		<span class="field__error" id={`${id}-error`}>{error}</span>
+	{/if}
+</label>
+
+<style>
+	.field {
+		display: grid;
+		gap: var(--space-2);
+	}
+
+	.field__label {
+		font-weight: 700;
+	}
+
+	.field__hint,
+	.field__error {
+		font-size: 0.92rem;
+	}
+
+	.field__hint {
+		color: var(--color-ink-muted);
+	}
+
+	.field__error {
+		color: var(--color-danger);
+	}
+
+	.field__input {
+		width: 100%;
+		min-height: 3rem;
+		padding: 0.85rem 1rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.84);
+		color: var(--color-ink);
+	}
+
+	.field__input--error {
+		border-color: rgba(178, 59, 47, 0.55);
+		background: rgba(255, 245, 242, 0.9);
+	}
+</style>
