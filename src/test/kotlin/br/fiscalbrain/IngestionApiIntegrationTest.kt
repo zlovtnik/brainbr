@@ -62,20 +62,16 @@ class IngestionApiIntegrationTest {
         jdbcTemplate.execute("DELETE FROM fiscal_knowledge_base")
         jdbcTemplate.execute("DELETE FROM companies")
         jdbcTemplate.update(
-            "INSERT INTO companies (id, name, cnpj, plan, is_active) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO companies (id, external_tenant_id, name) VALUES (?, ?, ?)",
             UUID.fromString(TENANT_A),
-            "Tenant A",
-            "11111111000101",
-            "starter",
-            true
+            "external-tenant-a",
+            "Tenant A"
         )
         jdbcTemplate.update(
-            "INSERT INTO companies (id, name, cnpj, plan, is_active) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO companies (id, external_tenant_id, name) VALUES (?, ?, ?)",
             UUID.fromString(TENANT_B),
-            "Tenant B",
-            "11111111000102",
-            "starter",
-            true
+            "external-tenant-b",
+            "Tenant B"
         )
 
         reset(ingestionQueuePublisher)
@@ -230,6 +226,7 @@ class IngestionApiIntegrationTest {
             registry.add("spring.datasource.url", postgres::getJdbcUrl)
             registry.add("spring.datasource.username", postgres::getUsername)
             registry.add("spring.datasource.password", postgres::getPassword)
+            registry.add("spring.flyway.url", postgres::getJdbcUrl)
             registry.add("spring.flyway.user", postgres::getUsername)
             registry.add("spring.flyway.password", postgres::getPassword)
             registry.add("app.providers.mode") { "stub" }

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import org.hibernate.validator.constraints.URL
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.validation.annotation.Validated
@@ -64,6 +65,7 @@ data class IngestionEnqueueRequest(
     @field:Size(max = 50)
     val lawType: String,
     @JsonProperty("source_url")
+    @field:URL(message = "source_url must be a valid URL")
     val sourceUrl: String? = null,
     @JsonProperty("raw_content")
     val rawContent: String? = null,
@@ -71,6 +73,7 @@ data class IngestionEnqueueRequest(
     val publishedAt: LocalDate? = null,
     @JsonProperty("effective_at")
     val effectiveAt: LocalDate? = null,
+    @field:Size(max = 20)
     val tags: List<String> = emptyList()
 )
 

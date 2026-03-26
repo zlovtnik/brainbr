@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component
 
 @Component
 class ChunkingService {
-    private val articleRegex = Regex("(?i)\\bArt\\.??\\s+\\d+[\\w-]*")
+    private val articleRegex = Regex("(?i)\\bArt\\.?\\s+\\d+[\\w-]*")
     private val headingRegex = Regex("(?im)^(section|chapter|capítulo|título)\\b.*$")
 
     fun chunk(content: String, maxChunkChars: Int = 1200, overlapChars: Int = 120): List<String> {

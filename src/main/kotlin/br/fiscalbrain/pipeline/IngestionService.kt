@@ -252,6 +252,9 @@ class IngestionService(
         if (hasUrl == hasRaw) {
             throw IngestionException("Exactly one of source_url or raw_content must be provided")
         }
+        if (hasUrl) {
+            validateAndResolveSourceUrl(sourceUrl!!)
+        }
     }
 
     private fun hashContent(content: String): String {

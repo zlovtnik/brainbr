@@ -17,6 +17,8 @@ test('inventory list supports filters, pagination navigation, and axe checks', a
 		scope: 'inventory:read inventory:write'
 	});
 
+	await page.goto('/inventory');
+	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Search').fill('citrus');
 	await page.getByRole('button', { name: 'Apply filters' }).click();
 	await expect(page).toHaveURL(/query=citrus/);

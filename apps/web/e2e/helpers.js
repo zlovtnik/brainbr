@@ -20,8 +20,12 @@ export async function resetMockApi(request) {
 			throw new Error(`resetMockApi: POST ${url} failed with status ${response.status()}: ${bodyText}`);
 		}
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		throw new Error(`resetMockApi: unable to reach mock API at ${url}: ${message}`);
+		const isConnectivity = error instanceof TypeError || error?.name === 'FetchError';
+		if (isConnectivity) {
+			const message = error instanceof Error ? error.message : String(error);
+			throw new Error(`resetMockApi: unable to reach mock API at ${url}: ${message}`);
+		}
+		throw error;
 	}
 }
 

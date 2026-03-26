@@ -11,4 +11,4 @@ ON CONFLICT DO NOTHING;
 INSERT INTO inventory_transition (company_id, sku_id, description, ncm_code, legacy_taxes, reform_taxes)
 VALUES
     ('00000000-0000-0000-0000-000000000001', 'SKU-1', 'Sample SKU A', '22030000', '{}'::jsonb, '{}'::jsonb)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (company_id, sku_id) DO NOTHING;

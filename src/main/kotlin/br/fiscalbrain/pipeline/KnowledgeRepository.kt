@@ -17,6 +17,7 @@ class KnowledgeRepository(
 ) {
     private val mapTypeRef = object : TypeReference<Map<String, Any>>() {}
 
+    @Transactional
     fun upsertVersionedKnowledge(
         companyId: UUID,
         lawRef: String,
@@ -122,6 +123,9 @@ class KnowledgeRepository(
             WHERE company_id = ?
               AND law_ref = ?
               AND is_superseded = FALSE
+            ORDER BY created_at DESC
+            LIMIT 1
+            FOR UPDATE
         """.trimIndent()
         return jdbcTemplate.query(sql, knowledgeDocumentRowMapper(), companyId, lawRef).firstOrNull()
     }
@@ -205,6 +209,7 @@ class KnowledgeRepository(
             INNER JOIN fiscal_knowledge_base b ON b.id = c.knowledge_id
             WHERE c.id = ?
               AND c.company_id = ?
+              AND b.is_superseded = FALSE
         """.trimIndent()
 
         return jdbcTemplate.query(sql, chunkSourceRowMapper(), chunkId, companyId).firstOrNull()

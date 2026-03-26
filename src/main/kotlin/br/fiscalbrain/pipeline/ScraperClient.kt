@@ -4,12 +4,10 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
-import org.springframework.http.client.ClientHttpResponse
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
-import org.springframework.web.client.ResponseErrorHandler
 import org.springframework.web.client.RestClient
-import java.io.IOException
+import java.net.HttpURLConnection
 import java.net.URI
 import java.time.Duration
 import kotlin.math.min
@@ -28,13 +26,13 @@ class ScraperClient {
 
     private val restClient: RestClient = RestClient.builder()
         .requestFactory(
-            SimpleClientHttpRequestFactory().apply {
+            NoRedirectRequestFactory().apply {
                 setConnectTimeout(Duration.ofSeconds(10))
                 setReadTimeout(Duration.ofSeconds(30))
             }
         )
         .defaultHeader(HttpHeaders.USER_AGENT, "fiscalbrain-scraper/1.0")
-        .errorHandler(NoThrowErrorHandler)
+        .defaultStatusHandler({ true }) { _, _ -> }
         .build()
 
     fun fetchWithRetry(uri: URI, hostHeader: String? = null, maxAttempts: Int = 3): ScrapeResult {
@@ -79,6 +77,10 @@ class ScraperClient {
 
                 if (status == HttpStatus.TOO_MANY_REQUESTS || status.is5xxServerError) {
                     logger.warn("Scrape attempt {} failed with status {} for {}", attempt, status, uri)
+                    if (attempt >= maxAttempts) {
+                        lastError = IngestionException("Exhausted retries with status ${status.value()} for $uri")
+                        break
+                    }
                     sleepBackoff(backoffMs)
                     backoffMs = min(backoffMs * 2, 8000)
                     continue
@@ -110,9 +112,10 @@ class ScraperClient {
         }
     }
 
-    private object NoThrowErrorHandler : ResponseErrorHandler {
-        override fun hasError(response: ClientHttpResponse): Boolean = false
-        @Throws(IOException::class)
-        override fun handleError(response: ClientHttpResponse) { /* handled manually */ }
+    private class NoRedirectRequestFactory : SimpleClientHttpRequestFactory() {
+        override fun prepareConnection(connection: HttpURLConnection, httpMethod: String) {
+            connection.instanceFollowRedirects = false
+            super.prepareConnection(connection, httpMethod)
+        }
     }
 }

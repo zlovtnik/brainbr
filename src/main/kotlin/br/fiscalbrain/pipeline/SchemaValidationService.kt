@@ -1,5 +1,6 @@
 package br.fiscalbrain.pipeline
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.JsonSchemaFactory

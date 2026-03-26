@@ -11,6 +11,18 @@ BEGIN
 END;
 $$;
 
+WITH duplicates AS (
+    SELECT id,
+           ROW_NUMBER() OVER (PARTITION BY law_ref, company_id ORDER BY updated_at DESC, id DESC) AS rn
+    FROM fiscal_knowledge_base
+    WHERE is_superseded IS NULL
+)
+UPDATE fiscal_knowledge_base f
+SET is_superseded = TRUE
+FROM duplicates d
+WHERE f.id = d.id
+  AND d.rn > 1;
+
 UPDATE fiscal_knowledge_base
 SET is_superseded = FALSE
 WHERE is_superseded IS NULL;

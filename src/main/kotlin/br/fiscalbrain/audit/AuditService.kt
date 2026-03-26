@@ -13,6 +13,7 @@ import br.fiscalbrain.pipeline.KnowledgeRepository
 import br.fiscalbrain.pipeline.RagOutput
 import br.fiscalbrain.pipeline.SchemaValidationService
 import br.fiscalbrain.queue.AuditQueuePublisher
+import br.fiscalbrain.transition.TransitionMath
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.security.MessageDigest
@@ -274,6 +275,15 @@ class AuditService(
                 vectorId = generationContext.topChunk.id,
                 auditConfidence = ragOutput.auditConfidence,
                 llmModelUsed = ragOutput.llmModelUsed
+            )
+
+            val legacyTotal = generationContext.sku.legacyTaxes.values.mapNotNull { (it as? Number)?.toDouble() }.sum()
+            val reformTotal = ragOutput.reformTaxes.values.mapNotNull { (it as? Number)?.toDouble() }.sum()
+            val riskScore = TransitionMath.computeRiskScore(legacyTotal, reformTotal, ragOutput.auditConfidence)
+            auditRepository.updateRiskScore(
+                companyId = job.companyId,
+                skuId = job.skuId,
+                riskScore = riskScore
             )
 
             auditRepository.appendAuditEvent(

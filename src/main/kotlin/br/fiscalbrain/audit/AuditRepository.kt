@@ -66,6 +66,22 @@ class AuditRepository(
         }
     }
 
+    fun updateRiskScore(companyId: UUID, skuId: String, riskScore: Int) {
+        val sql = """
+            UPDATE inventory_transition
+            SET transition_risk_score = ?,
+                updated_at = NOW()
+            WHERE company_id = ?
+              AND sku_id = ?
+              AND is_active = TRUE
+        """.trimIndent()
+
+        val updated = jdbcTemplate.update(sql, riskScore, companyId, skuId)
+        if (updated == 0) {
+            throw AuditNotFoundException("SKU $skuId not found for company $companyId")
+        }
+    }
+
     fun appendAuditEvent(
         companyId: UUID,
         skuId: String,

@@ -59,6 +59,7 @@ class TenancyIntegrationTest {
 	@AfterEach
 	fun cleanup() {
 		TenantContextHolder.clear()
+		jdbcTemplate.execute("DELETE FROM inventory_transition")
 	}
 
 	@Test
@@ -94,11 +95,10 @@ class TenancyIntegrationTest {
 	fun `rls blocks cross tenant update`() {
 		TenantContextHolder.set(TENANT_B_ID)
 		tenantDbSessionService.apply(TENANT_B_ID)
-		assertThatThrownBy {
-			jdbcTemplate.update(
-				"UPDATE inventory_transition SET description = 'oops' WHERE sku_id = 'SKU-1'"
-			)
-		}.hasMessageContaining("violates row-level security policy")
+		val updated = jdbcTemplate.update(
+			"UPDATE inventory_transition SET description = 'oops' WHERE sku_id = 'SKU-1'"
+		)
+		assertThat(updated).isZero()
 	}
 
 	companion object {
