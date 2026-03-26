@@ -15,7 +15,8 @@ import java.util.UUID
 
 class TenantContextFilter(
     private val jwtSecuritySettings: JwtSecuritySettings,
-    objectMapper: ObjectMapper
+    objectMapper: ObjectMapper,
+    private val tenantResolver: TenantResolver
 ) : OncePerRequestFilter() {
     private val errorResponseWriter = ErrorResponseWriter(objectMapper)
 
@@ -29,7 +30,7 @@ class TenantContextFilter(
             val authentication = SecurityContextHolder.getContext().authentication
             if (authentication is JwtAuthenticationToken && authentication.isAuthenticated) {
                 val tenantClaimValue = authentication.token.claims[jwtSecuritySettings.tenantClaim]?.toString()
-                val companyId = tenantClaimValue?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                val companyId = tenantResolver.resolve(tenantClaimValue)
                 if (companyId != null) {
                     TenantContextHolder.set(companyId)
                     MDC.put("company_id", companyId.toString())
@@ -57,7 +58,8 @@ class TenantContextFilter(
     private fun requiresTenant(request: HttpServletRequest): Boolean =
         request.requestURI.startsWith("/api/v1/inventory") ||
             request.requestURI.startsWith("/api/v1/audit") ||
-            request.requestURI.startsWith("/api/v1/split-payment")
+            request.requestURI.startsWith("/api/v1/split-payment") ||
+            request.requestURI.startsWith("/api/v1/ingestion")
 
     private fun writeTenantClaimError(response: HttpServletResponse, request: HttpServletRequest) {
         val requestId = request.getAttribute(RequestContextKeys.REQUEST_ID_ATTR)?.toString()

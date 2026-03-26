@@ -11,6 +11,14 @@
 - Session tenant context is set with `app.current_company_id` and validated server-side.
 - Administrative bypass may be enabled only through explicit server-controlled setting (`app.bypass_rls`).
 
+## Baseline schema (Epics 1-2)
+
+- `companies` (tenant registry) with `external_tenant_id` unique constraint.
+- `fiscal_knowledge_base` with `(law_ref, company_id)` uniqueness and HNSW index on `embedding`.
+- `inventory_transition` with PK `(sku_id, company_id)` and indexes on company, NCM, and transition risk.
+- `transition_calendar`, `fiscal_audit_log`, `split_payment_events` all tenant-scoped.
+- RLS enabled on all tenant-owned tables with `app.current_company_id`/`app.bypass_rls` guard.
+
 ## Ingestion and embedding storage
 
 - Legal corpus is persisted in `fiscal_knowledge_base`.

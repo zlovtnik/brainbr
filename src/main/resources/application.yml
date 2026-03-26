@@ -64,6 +64,9 @@ app:
       issuer-uri: ${APP_SECURITY_JWT_ISSUER_URI:}
       jwk-set-uri: ${APP_SECURITY_JWT_JWK_SET_URI:}
       tenant-claim: ${APP_SECURITY_JWT_TENANT_CLAIM:tenant_id}
+      enabled: ${APP_SECURITY_JWT_ENABLED:true}
+    bypass-rls:
+      enabled: ${APP_BYPASS_RLS_ENABLED:true}
 
 ---
 spring:

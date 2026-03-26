@@ -17,11 +17,15 @@ Open-source fiscal engine for the Brazilian tax reform transition (EC 132/2023),
    - `cp .env.example .env`
    - Set JWT config in `.env`:
      - `APP_SECURITY_JWT_JWK_SET_URI=<your-jwks-uri>` or `APP_SECURITY_JWT_ISSUER_URI=<your-issuer>`
+   - Set `DB_PASSWORD` and optional `DB_POOL_MAX`.
+   - Set `APP_SECURITY_JWT_TENANT_CLAIM` if your tenant claim differs.
 2. Build and run services:
    - `docker compose -f docker/docker-compose.yml up --build`
 3. Check API:
    - `GET http://localhost:8080/actuator/health`
    - `GET http://localhost:8080/api/v1/platform/info`
+4. Run migrations locally (optional): `./gradlew flywayMigrate`
+5. Verify RLS: run integration tests `./gradlew test` (uses Testcontainers).
 
 ## Documentation index
 

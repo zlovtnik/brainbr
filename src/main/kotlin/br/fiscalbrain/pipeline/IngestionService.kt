@@ -275,7 +275,7 @@ class IngestionService(
         return false
     }
 
-    private fun validateInput(sourceUrl: String?, rawContent: String?) {
+    fun validateInput(sourceUrl: String?, rawContent: String?) {
         val hasUrl = !sourceUrl.isNullOrBlank()
         val hasRaw = !rawContent.isNullOrBlank()
         if (hasUrl == hasRaw) {

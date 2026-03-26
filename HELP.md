@@ -20,6 +20,14 @@
   - Example: `APP_SECURITY_JWT_ISSUER_URI=https://auth.example.com`
 - Configure at least one of `APP_SECURITY_JWT_JWK_SET_URI` or `APP_SECURITY_JWT_ISSUER_URI`.
 
+## Local bootstrap
+
+- Copy `.env.example` to `.env` and set `DB_PASSWORD`, JWT issuer/JWKS, and `APP_SECURITY_JWT_TENANT_CLAIM` if different from `tenant_id`.
+- Start the stack: `docker compose -f docker/docker-compose.yml up --build`.
+- Health check: `curl http://localhost:8080/actuator/health` (no auth required).
+- Migrations: `./gradlew flywayMigrate` (runs automatically on boot via Flyway).
+- RLS verification: run `./gradlew test` to execute Testcontainers-backed RLS integration suite.
+
 ## Ingestion pipeline overview
 
 - Source acquisition -> chunking -> embedding -> upsert into `fiscal_knowledge_base`.
