@@ -2,19 +2,14 @@ package br.fiscalbrain.pipeline
 
 import br.fiscalbrain.core.tenant.TenantDbSessionService
 import br.fiscalbrain.queue.IngestionQueuePublisher
-import org.springframework.http.MediaType
-import org.springframework.http.client.ClientHttpResponse
-import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.client.RestClient
 import java.net.Inet6Address
 import java.net.InetAddress
-import java.net.HttpURLConnection
 import java.net.URI
 import java.net.UnknownHostException
+import java.security.MessageDigest
 import java.time.LocalDate
-import java.time.Duration
 import java.util.UUID
 
 class IngestionException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
@@ -37,26 +32,13 @@ class IngestionService(
     private val embeddingProvider: EmbeddingProvider,
     private val knowledgeRepository: KnowledgeRepository,
     private val tenantDbSessionService: TenantDbSessionService,
-    private val ingestionQueuePublisher: IngestionQueuePublisher
+    private val ingestionQueuePublisher: IngestionQueuePublisher,
+    private val scraperClient: ScraperClient
 ) {
     private data class ValidatedSourceTarget(
         val uri: URI,
         val resolvedAddress: InetAddress
     )
-
-    private val restClient = RestClient.builder()
-        .requestFactory(
-            object : SimpleClientHttpRequestFactory() {
-                override fun prepareConnection(connection: HttpURLConnection, httpMethod: String) {
-                    super.prepareConnection(connection, httpMethod)
-                    connection.instanceFollowRedirects = false
-                }
-            }.apply {
-                setConnectTimeout(Duration.ofSeconds(10))
-                setReadTimeout(Duration.ofSeconds(30))
-            }
-        )
-        .build()
 
     fun enqueue(request: IngestionRequest): String {
         val job = IngestionJob(
@@ -81,10 +63,10 @@ class IngestionService(
 
         val content = job.rawContent?.trim().takeUnless { it.isNullOrBlank() }
             ?: fetchContent(job.sourceUrl!!)
-        val contentHash = VectorUtils.hashContent(content)
+        val contentHash = hashContent(content)
 
         return tenantDbSessionService.applyAndRunWithResult(job.companyId) {
-            val existing = knowledgeRepository.findKnowledgeDocument(job.companyId, job.lawRef)
+            val existing = knowledgeRepository.findActiveKnowledgeDocument(job.companyId, job.lawRef)
             if (existing?.contentHash == contentHash) {
                 return@applyAndRunWithResult IngestionProcessResult(
                     jobId = job.jobId,
@@ -100,7 +82,7 @@ class IngestionService(
                 "source" to if (job.sourceUrl != null) "url" else "raw"
             )
 
-            val knowledge = knowledgeRepository.upsertKnowledgeDocument(
+            val knowledge = knowledgeRepository.upsertVersionedKnowledge(
                 companyId = job.companyId,
                 lawRef = job.lawRef,
                 lawType = job.lawType,
@@ -112,19 +94,23 @@ class IngestionService(
                 contentHash = contentHash
             )
 
-            val chunkInputs = chunkingService.chunk(content)
-                .mapIndexed { idx, chunk ->
-                    ChunkWriteInput(
-                        chunkIndex = idx,
-                        content = chunk,
-                        embedding = embeddingProvider.embed(chunk),
-                        metadata = mapOf(
-                            "law_ref" to job.lawRef,
-                            "chunk_index" to idx,
-                            "content_version" to knowledge.contentVersion
-                        )
+            val chunks = chunkingService.chunk(content)
+            val embeddings = embeddingProvider.embedBatch(chunks)
+            require(embeddings.size == chunks.size) {
+                "Embedding count (${embeddings.size}) does not match chunk count (${chunks.size})"
+            }
+            val chunkInputs = chunks.zip(embeddings).mapIndexed { idx, (chunk, embedding) ->
+                ChunkWriteInput(
+                    chunkIndex = idx,
+                    content = chunk,
+                    embedding = embedding,
+                    metadata = mapOf(
+                        "law_ref" to job.lawRef,
+                        "chunk_index" to idx,
+                        "content_version" to knowledge.contentVersion
                     )
-                }
+                )
+            }
 
             knowledgeRepository.replaceChunks(
                 knowledgeId = knowledge.id,
@@ -146,24 +132,9 @@ class IngestionService(
         val pinnedUri = buildPinnedUri(target.uri, target.resolvedAddress)
         val hostHeader = buildHostHeader(target.uri)
 
-        val response = restClient.get()
-            .uri(pinnedUri)
-            .header("Host", hostHeader)
-            .accept(MediaType.TEXT_PLAIN, MediaType.TEXT_HTML)
-            .retrieve()
-            .toEntity(String::class.java)
-
-        if (response.statusCode.is3xxRedirection) {
-            throw IngestionException("Redirect responses are not allowed for source_url")
-        }
-
-        val body = response.body
-            ?: throw IngestionException("Failed to fetch source content")
-
-        val normalized = body.trim()
-        if (normalized.isBlank()) {
-            throw IngestionException("Fetched source content is empty")
-        }
+        val result = scraperClient.fetchWithRetry(pinnedUri, hostHeader)
+        val normalized = result.body.trim()
+        if (normalized.isBlank()) throw IngestionException("Fetched source content is empty")
         return normalized
     }
 
@@ -281,6 +252,11 @@ class IngestionService(
         if (hasUrl == hasRaw) {
             throw IngestionException("Exactly one of source_url or raw_content must be provided")
         }
+    }
+
+    private fun hashContent(content: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(content.toByteArray(Charsets.UTF_8))
+        return digest.joinToString(separator = "") { "%02x".format(it) }
     }
 }
 

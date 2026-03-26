@@ -316,16 +316,17 @@ class AuditService(
     private fun buildAuditPrompt(sku: AuditSkuRecord, chunkContents: List<String>): String {
         val context = chunkContents.joinToString(separator = "\n---\n")
         return """
-            Analyze the fiscal impact for the SKU and return a JSON object that matches the required schema.
-            SKU:
-            - sku_id: ${sku.skuId}
-            - description: ${sku.description}
-            - ncm_code: ${sku.ncmCode}
-            - origin_state: ${sku.originState}
-            - destination_state: ${sku.destinationState}
-            - legacy_taxes: ${sku.legacyTaxes}
+            You are a fiscal audit engine. Respond ONLY with valid JSON matching keys: reform_taxes (object), audit_confidence (number 0-1), llm_model_used (string), source (object with law_ref, content, source_url).
 
-            Legal context:
+            SKU:
+              sku_id: ${sku.skuId}
+              description: ${sku.description}
+              ncm_code: ${sku.ncmCode}
+              origin_state: ${sku.originState}
+              destination_state: ${sku.destinationState}
+              legacy_taxes: ${sku.legacyTaxes}
+
+            Candidate legal context chunks:
             $context
         """.trimIndent()
     }

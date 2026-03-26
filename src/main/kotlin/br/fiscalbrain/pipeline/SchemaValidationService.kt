@@ -1,6 +1,5 @@
 package br.fiscalbrain.pipeline
 
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.JsonSchemaFactory
@@ -21,6 +20,7 @@ class SchemaValidationService(
     private val reformTaxesSchema: JsonSchema = loadSchema("schemas/reform-taxes-v1.schema.json")
 
     private val explainabilityArtifactSchema: JsonSchema = loadSchema("schemas/explainability-artifact-v1.schema.json")
+    private val ragOutputSchema: JsonSchema = loadSchema("schemas/rag-output-v1.schema.json")
 
     private val splitPaymentEventSchema: JsonSchema = loadSchema("schemas/split-payment-event-v1.schema.json")
 
@@ -33,21 +33,7 @@ class SchemaValidationService(
     }
 
     fun validateRagOutput(payload: Any) {
-        val node = objectMapper.valueToTree<JsonNode>(payload)
-        val requiredRoot = listOf("reform_taxes", "audit_confidence", "llm_model_used", "source")
-        requiredRoot.forEach { field ->
-            if (!node.has(field)) {
-                throw SchemaValidationException("Schema validation failed for rag_output: missing field $field")
-            }
-        }
-
-        val sourceNode = node.path("source")
-        val requiredSource = listOf("law_ref", "content", "source_url")
-        requiredSource.forEach { field ->
-            if (!sourceNode.has(field) || sourceNode.path(field).asText().isBlank()) {
-                throw SchemaValidationException("Schema validation failed for rag_output.source: missing field $field")
-            }
-        }
+        validate(schema = ragOutputSchema, payload = payload, label = "rag_output")
     }
 
     fun validateExplainabilityArtifact(payload: Any) {
