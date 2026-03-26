@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Repository
 import java.sql.ResultSet
+import java.util.Locale
 import java.util.UUID
 
 @Repository
@@ -82,29 +83,71 @@ class InventoryRepository(
         return jdbcTemplate.query(sql, inventoryRowMapper(), skuId, companyId, includeInactive).firstOrNull()
     }
 
-    fun list(companyId: UUID, page: Int, limit: Int, includeInactive: Boolean): List<InventoryRecord> {
-        require(page > 0) { "page must be > 0" }
-        require(limit > 0) { "limit must be > 0" }
-        val offset = (page - 1) * limit
+    fun list(companyId: UUID, filters: InventoryListFilters): List<InventoryRecord> {
+        require(filters.page > 0) { "page must be > 0" }
+        require(filters.limit > 0) { "limit must be > 0" }
+        val offset = (filters.page - 1) * filters.limit
+        val escapedQuery = filters.query?.let(::toSearchPattern)
+        val orderBy = when (filters.sortBy) {
+            InventorySortBy.UPDATED_AT -> "updated_at"
+            InventorySortBy.SKU_ID -> "sku_id"
+        }
+        val direction = when (filters.sortOrder) {
+            InventorySortOrder.ASC -> "ASC"
+            InventorySortOrder.DESC -> "DESC"
+        }
         val sql = """
             SELECT sku_id, description, ncm_code, origin_state, destination_state, legacy_taxes, reform_taxes, is_active, updated_at
             FROM inventory_transition
             WHERE company_id = ?
               AND (is_active = TRUE OR ? = TRUE)
-            ORDER BY updated_at DESC
+              AND (
+                ? IS NULL
+                OR sku_id ILIKE ? ESCAPE '\'
+                OR description ILIKE ? ESCAPE '\'
+                OR ncm_code ILIKE ? ESCAPE '\'
+              )
+            ORDER BY $orderBy $direction
             LIMIT ? OFFSET ?
         """.trimIndent()
-        return jdbcTemplate.query(sql, inventoryRowMapper(), companyId, includeInactive, limit, offset)
+        return jdbcTemplate.query(
+            sql,
+            inventoryRowMapper(),
+            companyId,
+            filters.includeInactive,
+            filters.query,
+            escapedQuery,
+            escapedQuery,
+            escapedQuery,
+            filters.limit,
+            offset
+        )
     }
 
-    fun count(companyId: UUID, includeInactive: Boolean): Long {
+    fun count(companyId: UUID, filters: InventoryListFilters): Long {
+        val escapedQuery = filters.query?.let(::toSearchPattern)
         val sql = """
             SELECT COUNT(*)
             FROM inventory_transition
             WHERE company_id = ?
               AND (is_active = TRUE OR ? = TRUE)
+              AND (
+                ? IS NULL
+                OR sku_id ILIKE ? ESCAPE '\'
+                OR description ILIKE ? ESCAPE '\'
+                OR ncm_code ILIKE ? ESCAPE '\'
+              )
         """.trimIndent()
-        return jdbcTemplate.queryForObject(sql, Long::class.java, companyId, includeInactive) ?: 0L
+        return jdbcTemplate.queryForObject(
+            sql,
+            Long::class.java,
+            companyId,
+            filters.includeInactive,
+            filters.query,
+            escapedQuery,
+            escapedQuery,
+            escapedQuery
+        ) ?: 0L
     }
 
     fun softDelete(skuId: String, companyId: UUID): Boolean {
@@ -138,5 +181,14 @@ class InventoryRepository(
             return emptyMap()
         }
         return objectMapper.readValue(value, mapTypeRef)
+    }
+
+    private fun toSearchPattern(query: String): String {
+        val escaped = query
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+            .lowercase(Locale.ROOT)
+        return "%$escaped%"
     }
 }

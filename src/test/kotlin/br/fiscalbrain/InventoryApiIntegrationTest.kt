@@ -208,6 +208,57 @@ class InventoryApiIntegrationTest {
     }
 
     @Test
+    fun `should support filtered and sorted inventory listing`() {
+        mockMvc.perform(
+            post("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(writeRequestPayload("SKU-200", "Produto Beta"))
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(
+            post("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(writeRequestPayload("SKU-100", "Produto Alfa"))
+        ).andExpect(status().isOk)
+
+        mockMvc.perform(
+            get("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .queryParam("query", "alfa")
+                .queryParam("sort_by", "sku_id")
+                .queryParam("sort_order", "asc")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_count").value(1))
+            .andExpect(jsonPath("$.items[0].sku_id").value("SKU-100"))
+            .andExpect(jsonPath("$.items[0].description").value("Produto Alfa"))
+
+        mockMvc.perform(
+            get("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .queryParam("sort_by", "sku_id")
+                .queryParam("sort_order", "asc")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.items[0].sku_id").value("SKU-100"))
+            .andExpect(jsonPath("$.items[1].sku_id").value("SKU-200"))
+    }
+
+    @Test
+    fun `should reject invalid inventory sort params`() {
+        mockMvc.perform(
+            get("/api/v1/inventory/sku")
+                .header("Authorization", "Bearer tenant-a-read-write")
+                .queryParam("sort_by", "description")
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error_code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.message").value("Invalid sort_by value. Supported values: updated_at, sku_id"))
+    }
+
+    @Test
     fun `should preserve request id and keep health endpoint open`() {
         mockMvc.perform(
             get("/api/v1/platform/info")

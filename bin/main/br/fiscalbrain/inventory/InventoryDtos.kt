@@ -101,7 +101,12 @@ data class InventoryListQuery(
     @field:Max(100)
     val limit: Int = 50,
     @JsonProperty("include_inactive")
-    val includeInactive: Boolean = false
+    val includeInactive: Boolean = false,
+    val query: String? = null,
+    @JsonProperty("sort_by")
+    val sortBy: String? = null,
+    @JsonProperty("sort_order")
+    val sortOrder: String? = null
 )
 
 data class InventoryRecord(

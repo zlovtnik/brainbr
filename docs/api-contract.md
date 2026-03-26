@@ -174,6 +174,9 @@ Query parameters:
 - `page` (int, optional, default `1`, min `1`).
 - `limit` (int, optional, default `50`, max `100`).
 - `include_inactive` (bool, optional, default `false`).
+- `query` (string, optional): case-insensitive match against `sku_id`, `description`, and `ncm_code`.
+- `sort_by` (string, optional, default `updated_at`): `updated_at` or `sku_id`.
+- `sort_order` (string, optional, default `desc`): `asc` or `desc`.
 
 Response (`200`):
 

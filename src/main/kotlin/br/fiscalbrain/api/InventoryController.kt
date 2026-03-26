@@ -2,6 +2,7 @@ package br.fiscalbrain.api
 
 import br.fiscalbrain.audit.AuditService
 import br.fiscalbrain.inventory.InventoryDeleteResponse
+import br.fiscalbrain.inventory.InventoryListFilters
 import br.fiscalbrain.inventory.InventoryListResponse
 import br.fiscalbrain.inventory.InventoryService
 import br.fiscalbrain.inventory.InventorySkuResponse
@@ -53,8 +54,23 @@ class InventoryController(
         @Max(100)
         limit: Int,
         @RequestParam(name = "include_inactive", defaultValue = "false")
-        includeInactive: Boolean
-    ): InventoryListResponse = inventoryService.list(page, limit, includeInactive)
+        includeInactive: Boolean,
+        @RequestParam(required = false)
+        query: String?,
+        @RequestParam(name = "sort_by", required = false)
+        sortBy: String?,
+        @RequestParam(name = "sort_order", required = false)
+        sortOrder: String?
+    ): InventoryListResponse = inventoryService.list(
+        InventoryListFilters.from(
+            page = page,
+            limit = limit,
+            includeInactive = includeInactive,
+            query = query,
+            sortBy = sortBy,
+            sortOrder = sortOrder
+        )
+    )
 
     @PutMapping("/{skuId}")
     fun update(
