@@ -1,6 +1,7 @@
 package br.fiscalbrain.audit
 
 import br.fiscalbrain.core.config.AppSettings
+import br.fiscalbrain.core.web.InvalidRequestException
 import br.fiscalbrain.core.tenant.TenantDbSessionService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
@@ -33,6 +34,22 @@ class AuditService(
     private val appSettings: AppSettings,
     objectMapper: ObjectMapper
 ) {
+    private data class AuditJobContext(
+        val sku: AuditSkuRecord,
+        val retrievalQuery: String,
+        val queryEmbedding: List<Double>
+    )
+
+    private data class AuditGenerationContext(
+        val sku: AuditSkuRecord,
+        val retrievalQuery: String,
+        val topK: Int,
+        val topChunk: br.fiscalbrain.pipeline.KnowledgeChunk,
+        val topSource: br.fiscalbrain.pipeline.ChunkSourceRecord,
+        val candidateChunks: List<Map<String, Any>>,
+        val prompt: String
+    )
+
     private val canonicalObjectMapper = objectMapper.copy()
         .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
 
@@ -119,7 +136,7 @@ class AuditService(
     @Transactional(readOnly = true)
     fun explainArtifactByRunId(runId: String): AuditExplainabilityArtifactResponse {
         val parsedRunId = runCatching { UUID.fromString(runId) }
-            .getOrElse { throw IllegalArgumentException("Invalid run_id format") }
+            .getOrElse { throw InvalidRequestException("Invalid run_id format") }
         val companyId = tenantDbSessionService.requireCompanyId()
         tenantDbSessionService.apply(companyId)
         val record = auditRepository.findExplainabilityRun(companyId, parsedRunId)
@@ -127,18 +144,43 @@ class AuditService(
         return toExplainabilityArtifactResponse(record)
     }
 
-    @Transactional
     fun processAuditJob(job: AuditJob) {
-        tenantDbSessionService.applyAndRunWithResult(job.companyId) {
-            val sku = auditRepository.findSku(job.companyId, job.skuId)
-                ?: throw AuditNotFoundException("SKU ${job.skuId} not found")
+        val auditContext = buildAuditJobContext(job)
+        val generationContext = buildAuditGenerationContext(job, auditContext)
+        val ragOutput = auditModelProvider.generateAudit(
+            AuditGenerationInput(
+                prompt = generationContext.prompt,
+                fallbackLawRef = generationContext.topSource.lawRef,
+                fallbackSourceUrl = generationContext.topSource.sourceUrl,
+                fallbackContent = generationContext.topSource.content,
+                llmModel = appSettings.models.llm
+            )
+        )
 
-            val retrievalQuery = buildRetrievalQuery(sku)
+        validatePayloads(generationContext.sku.legacyTaxes, ragOutput)
+        persistAuditOutcome(job, generationContext, ragOutput)
+    }
+
+    private fun buildAuditJobContext(job: AuditJob): AuditJobContext {
+        val sku = tenantDbSessionService.applyAndRunWithResult(job.companyId) {
+            auditRepository.findSku(job.companyId, job.skuId)
+                ?: throw AuditNotFoundException("SKU ${job.skuId} not found")
+        }
+        val retrievalQuery = buildRetrievalQuery(sku)
+        val queryEmbedding = embeddingProvider.embed(retrievalQuery)
+        return AuditJobContext(
+            sku = sku,
+            retrievalQuery = retrievalQuery,
+            queryEmbedding = queryEmbedding
+        )
+    }
+
+    private fun buildAuditGenerationContext(job: AuditJob, auditContext: AuditJobContext): AuditGenerationContext =
+        tenantDbSessionService.applyAndRunWithResult(job.companyId) {
             val topK = 5
-            val queryEmbedding = embeddingProvider.embed(retrievalQuery)
             val chunks = knowledgeRepository.queryChunks(
                 companyId = job.companyId,
-                queryEmbedding = queryEmbedding,
+                queryEmbedding = auditContext.queryEmbedding,
                 topK = topK,
                 lawType = null,
                 publishedAfter = null
@@ -152,36 +194,36 @@ class AuditService(
             val topSource = knowledgeRepository.findChunkSource(topChunk.id, job.companyId)
                 ?: throw AuditProcessingException("Missing source for selected chunk ${topChunk.id}")
 
-            val prompt = buildAuditPrompt(sku, chunks.map { it.content })
-            val ragOutput = auditModelProvider.generateAudit(
-                AuditGenerationInput(
-                    prompt = prompt,
-                    fallbackLawRef = topSource.lawRef,
-                    fallbackSourceUrl = topSource.sourceUrl,
-                    fallbackContent = topSource.content,
-                    llmModel = appSettings.models.llm
-                )
-            )
-
-            validatePayloads(sku.legacyTaxes, ragOutput)
-
-            val createdAt = OffsetDateTime.now(ZoneOffset.UTC)
-            val sourceSnapshot = mapOf(
-                "law_ref" to topSource.lawRef,
-                "content" to topSource.content,
-                "source_url" to topSource.sourceUrl
-            )
-            val replayContext = mapOf(
-                "retrieval_query" to retrievalQuery,
-                "top_k" to topK,
-                "selected_chunk_id" to topChunk.id.toString(),
-                "candidate_chunks" to chunks.map { chunk ->
+            AuditGenerationContext(
+                sku = auditContext.sku,
+                retrievalQuery = auditContext.retrievalQuery,
+                topK = topK,
+                topChunk = topChunk,
+                topSource = topSource,
+                candidateChunks = chunks.map { chunk ->
                     mapOf(
                         "chunk_id" to chunk.id.toString(),
                         "law_ref" to (chunk.metadata["law_ref"]?.toString() ?: topSource.lawRef),
                         "score" to chunk.score
                     )
-                }
+                },
+                prompt = buildAuditPrompt(auditContext.sku, chunks.map { it.content })
+            )
+        }
+
+    private fun persistAuditOutcome(job: AuditJob, generationContext: AuditGenerationContext, ragOutput: RagOutput) {
+        tenantDbSessionService.applyAndRunWithResult(job.companyId) {
+            val createdAt = OffsetDateTime.now(ZoneOffset.UTC)
+            val sourceSnapshot = mapOf(
+                "law_ref" to generationContext.topSource.lawRef,
+                "content" to generationContext.topSource.content,
+                "source_url" to generationContext.topSource.sourceUrl
+            )
+            val replayContext = mapOf(
+                "retrieval_query" to generationContext.retrievalQuery,
+                "top_k" to generationContext.topK,
+                "selected_chunk_id" to generationContext.topChunk.id.toString(),
+                "candidate_chunks" to generationContext.candidateChunks
             )
             val ragOutputPayload = mapOf(
                 "reform_taxes" to ragOutput.reformTaxes,
@@ -194,13 +236,13 @@ class AuditService(
                 )
             )
             val artifactPayload = mapOf(
-                "sku_id" to sku.skuId,
+                "sku_id" to generationContext.sku.skuId,
                 "job_id" to job.jobId,
                 "request_id" to job.requestId,
                 "artifact_version" to EXPLAINABILITY_ARTIFACT_VERSION,
                 "schema_version" to EXPLAINABILITY_SCHEMA_VERSION,
                 "llm_model_used" to ragOutput.llmModelUsed,
-                "vector_id" to topChunk.id.toString(),
+                "vector_id" to generationContext.topChunk.id.toString(),
                 "audit_confidence" to ragOutput.auditConfidence,
                 "source_snapshot" to sourceSnapshot,
                 "replay_context" to replayContext,
@@ -217,7 +259,7 @@ class AuditService(
                 artifactVersion = EXPLAINABILITY_ARTIFACT_VERSION,
                 schemaVersion = EXPLAINABILITY_SCHEMA_VERSION,
                 llmModelUsed = ragOutput.llmModelUsed,
-                vectorId = topChunk.id,
+                vectorId = generationContext.topChunk.id,
                 auditConfidence = ragOutput.auditConfidence,
                 sourceSnapshot = sourceSnapshot,
                 replayContext = replayContext,
@@ -229,7 +271,7 @@ class AuditService(
                 companyId = job.companyId,
                 skuId = job.skuId,
                 reformTaxes = ragOutput.reformTaxes,
-                vectorId = topChunk.id,
+                vectorId = generationContext.topChunk.id,
                 auditConfidence = ragOutput.auditConfidence,
                 llmModelUsed = ragOutput.llmModelUsed
             )
@@ -242,7 +284,7 @@ class AuditService(
                 requestId = job.requestId,
                 payload = auditEventPayload(
                     skuId = job.skuId,
-                    vectorId = topChunk.id,
+                    vectorId = generationContext.topChunk.id,
                     auditConfidence = ragOutput.auditConfidence,
                     llmModelUsed = ragOutput.llmModelUsed,
                     runId = runRecord.id,
@@ -295,7 +337,7 @@ class AuditService(
         return try {
             LocalDate.parse(raw)
         } catch (_: DateTimeParseException) {
-            throw IllegalArgumentException("Invalid date format for published_after. Use YYYY-MM-DD")
+            throw InvalidRequestException("Invalid date format for published_after. Use YYYY-MM-DD")
         }
     }
 

@@ -5,13 +5,38 @@ import br.fiscalbrain.pipeline.IngestionJob
 import br.fiscalbrain.splitpayment.SplitPaymentIntegrationEvent
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.slf4j.LoggerFactory
 
 @Configuration
 class QueuePublisherConfiguration {
     private val logger = LoggerFactory.getLogger(QueuePublisherConfiguration::class.java)
+
+    @Bean
+    @ConditionalOnBean(StringRedisTemplate::class)
+    fun redisStreamQueueClient(
+        redisTemplate: StringRedisTemplate,
+        @Value("\${app.queue.stream.ingestion:queue_ingestion}") ingestionStream: String,
+        @Value("\${app.queue.stream.audit:queue_audit}") auditStream: String,
+        @Value("\${app.queue.stream.reporting:queue_reporting}") reportingStream: String,
+        @Value("\${app.queue.stream.ingestion-dlq:queue_ingestion_dlq}") ingestionDlqStream: String,
+        @Value("\${app.queue.stream.audit-dlq:queue_audit_dlq}") auditDlqStream: String,
+        @Value("\${app.queue.group.ingestion:ingestion-workers}") ingestionGroup: String,
+        @Value("\${app.queue.group.audit:audit-workers}") auditGroup: String
+    ): RedisStreamQueueClient = RedisStreamQueueClient(
+        redisTemplate = redisTemplate,
+        ingestionStream = ingestionStream,
+        auditStream = auditStream,
+        reportingStream = reportingStream,
+        ingestionDlqStream = ingestionDlqStream,
+        auditDlqStream = auditDlqStream,
+        ingestionGroup = ingestionGroup,
+        auditGroup = auditGroup
+    )
 
     @Bean
     fun redisIngestionQueuePublisher(

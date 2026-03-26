@@ -3,15 +3,18 @@ package br.fiscalbrain.pipeline
 import br.fiscalbrain.core.tenant.TenantDbSessionService
 import br.fiscalbrain.queue.IngestionQueuePublisher
 import org.springframework.http.MediaType
+import org.springframework.http.client.ClientHttpResponse
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.client.RestClient
 import java.net.Inet6Address
 import java.net.InetAddress
+import java.net.HttpURLConnection
 import java.net.URI
 import java.net.UnknownHostException
 import java.time.LocalDate
+import java.time.Duration
 import java.util.UUID
 
 class IngestionException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
@@ -42,10 +45,17 @@ class IngestionService(
     )
 
     private val restClient = RestClient.builder()
-        .requestFactory(SimpleClientHttpRequestFactory().apply {
-            setConnectTimeout(10_000)
-            setReadTimeout(30_000)
-        })
+        .requestFactory(
+            object : SimpleClientHttpRequestFactory() {
+                override fun prepareConnection(connection: HttpURLConnection, httpMethod: String) {
+                    super.prepareConnection(connection, httpMethod)
+                    connection.instanceFollowRedirects = false
+                }
+            }.apply {
+                setConnectTimeout(Duration.ofSeconds(10))
+                setReadTimeout(Duration.ofSeconds(30))
+            }
+        )
         .build()
 
     fun enqueue(request: IngestionRequest): String {
@@ -141,10 +151,16 @@ class IngestionService(
             .header("Host", hostHeader)
             .accept(MediaType.TEXT_PLAIN, MediaType.TEXT_HTML)
             .retrieve()
-            .body(String::class.java)
+            .toEntity(String::class.java)
+
+        if (response.statusCode.is3xxRedirection) {
+            throw IngestionException("Redirect responses are not allowed for source_url")
+        }
+
+        val body = response.body
             ?: throw IngestionException("Failed to fetch source content")
 
-        val normalized = response.trim()
+        val normalized = body.trim()
         if (normalized.isBlank()) {
             throw IngestionException("Fetched source content is empty")
         }

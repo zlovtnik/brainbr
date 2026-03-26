@@ -10,11 +10,9 @@ import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.MDC
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
-import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import java.util.UUID
 
-@Component
 class TenantContextFilter(
     private val jwtSecuritySettings: JwtSecuritySettings,
     objectMapper: ObjectMapper

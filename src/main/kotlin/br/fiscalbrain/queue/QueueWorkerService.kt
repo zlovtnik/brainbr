@@ -47,6 +47,13 @@ class QueueWorkerService(
             val attempt = extractAttempt(payload)
             val job = runCatching { toIngestionJob(payload, attempt) }.getOrElse {
                 logger.error("Invalid ingestion payload identifiers={}", summarizePayload(payload), it)
+                publishMalformedRecordToDeadLetterQueue(
+                    client = client,
+                    dlqStream = client.ingestionDlqName,
+                    payload = payload,
+                    attempt = attempt,
+                    ex = it
+                )
                 client.acknowledge(stream, group, record.id.value)
                 return@forEach
             }
@@ -94,6 +101,13 @@ class QueueWorkerService(
             val attempt = extractAttempt(payload)
             val job = runCatching { toAuditJob(payload, attempt) }.getOrElse {
                 logger.error("Invalid audit payload identifiers={}", summarizePayload(payload), it)
+                publishMalformedRecordToDeadLetterQueue(
+                    client = client,
+                    dlqStream = client.auditDlqName,
+                    payload = payload,
+                    attempt = attempt,
+                    ex = it
+                )
                 client.acknowledge(stream, group, record.id.value)
                 return@forEach
             }
@@ -160,6 +174,24 @@ class QueueWorkerService(
         }
 
         client.acknowledge(stream, group, recordId)
+    }
+
+    private fun publishMalformedRecordToDeadLetterQueue(
+        client: RedisStreamQueueClient,
+        dlqStream: String,
+        payload: Map<String, String>,
+        attempt: Int,
+        ex: Throwable
+    ) {
+        val dlqPayload = payload.toMutableMap()
+        dlqPayload["dlq_reason"] = "malformed_payload"
+        dlqPayload["error"] = ex.message ?: ex::class.java.simpleName
+        dlqPayload["error_type"] = ex::class.java.name
+        dlqPayload["attempt"] = attempt.toString()
+        dlqPayload["identifiers"] = objectMapper.writeValueAsString(summarizePayload(payload))
+        dlqPayload.remove("retry_after")
+        dlqPayload["payload"] = withUpdatedAttempt(dlqPayload["payload"], attempt)
+        client.enqueue(dlqStream, dlqPayload)
     }
 
     private fun toAuditJob(payload: Map<String, String>, attemptOverride: Int): AuditJob {

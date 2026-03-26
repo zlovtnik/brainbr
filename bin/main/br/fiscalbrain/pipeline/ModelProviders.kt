@@ -7,8 +7,10 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
+import java.time.Duration
 import kotlin.math.abs
 
 data class AuditGenerationInput(
@@ -37,6 +39,12 @@ class OpenAiModelProvider(
 ) : EmbeddingProvider, AuditModelProvider {
     private val client: RestClient = RestClient.builder()
         .baseUrl(baseUrl)
+        .requestFactory(
+            SimpleClientHttpRequestFactory().apply {
+                setConnectTimeout(Duration.ofSeconds(5))
+                setReadTimeout(Duration.ofSeconds(30))
+            }
+        )
         .build()
 
     override fun embed(text: String): List<Double> {
@@ -113,6 +121,12 @@ class OpenAiModelProvider(
             emptyMap()
         }
         
+        if (!parsed.hasNonNull("audit_confidence")) {
+            throw IllegalStateException(
+                "LLM response missing audit_confidence (model=${input.llmModel}, response_id=$responseId)"
+            )
+        }
+
         return RagOutput(
             reformTaxes = reformTaxes,
             auditConfidence = parsed.path("audit_confidence").asDouble(),

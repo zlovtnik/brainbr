@@ -10,7 +10,7 @@ object VectorUtils {
 
     fun hashContent(input: String): String {
         val normalized = Normalizer.normalize(input.trim(), Normalizer.Form.NFKC)
-        val digest = MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray(Charsets.UTF_8))
+        val digest = MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray())
         return digest.joinToString(separator = "") { "%02x".format(it) }
     }
 }

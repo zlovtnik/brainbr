@@ -76,7 +76,7 @@ class SplitPaymentRepository(
         require(page >= 1) { "Invalid pagination: page must be >= 1, got page=$page" }
         require(limit > 0) { "Invalid pagination: limit must be > 0, got limit=$limit" }
 
-        val offset = (page - 1) * limit
+        val offset = (page - 1L) * limit.toLong()
         val args = mutableListOf<Any>(companyId)
 
         val sql = StringBuilder(
@@ -208,13 +208,11 @@ class SplitPaymentRepository(
             amount = rs.getLong("amount"),
             currency = rs.getString("currency"),
             idempotencyKey = rs.getString("idempotency_key"),
-            timestamp = rs.getTimestamp("event_timestamp")?.toInstant()
-                ?: throw IllegalStateException("event_timestamp cannot be null"),
+            timestamp = rs.getTimestamp("event_timestamp").toInstant(),
             integrationStatus = rs.getString("integration_status"),
             integrationMetadata = readAnyMap(rs.getString("integration_metadata_json")),
             eventPayload = readAnyMap(rs.getString("event_payload_json")),
-            createdAt = rs.getTimestamp("created_at")?.toInstant()
-                ?: throw IllegalStateException("created_at cannot be null")
+            createdAt = rs.getTimestamp("created_at").toInstant()
         )
     }
 

@@ -84,8 +84,8 @@ class InventoryRepository(
 
     fun list(companyId: UUID, page: Int, limit: Int, includeInactive: Boolean): List<InventoryRecord> {
         require(page > 0) { "page must be > 0" }
-        require(limit in 1..1000) { "limit must be between 1 and 1000" }
-        val offset = (page - 1).toLong() * limit
+        require(limit > 0) { "limit must be > 0" }
+        val offset = (page - 1) * limit
         val sql = """
             SELECT sku_id, description, ncm_code, origin_state, destination_state, legacy_taxes, reform_taxes, is_active, updated_at
             FROM inventory_transition
@@ -129,8 +129,7 @@ class InventoryRepository(
             legacyTaxes = readJsonMap(rs.getString("legacy_taxes")),
             reformTaxes = readJsonMap(rs.getString("reform_taxes")),
             isActive = rs.getBoolean("is_active"),
-            updatedAt = rs.getTimestamp("updated_at")?.toInstant()
-                ?: throw IllegalStateException("updated_at cannot be null")
+            updatedAt = rs.getTimestamp("updated_at").toInstant()
         )
     }
 

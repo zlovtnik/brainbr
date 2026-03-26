@@ -27,12 +27,11 @@ import org.springframework.security.web.context.SecurityContextHolderFilter
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 class SecurityConfig(
     private val jwtSecuritySettings: JwtSecuritySettings,
-    private val tenantContextFilter: TenantContextFilter,
     private val requestIdFilter: RequestIdFilter,
     private val objectMapper: ObjectMapper
 ) {
     @Bean
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun securityFilterChain(http: HttpSecurity, tenantContextFilter: TenantContextFilter): SecurityFilterChain {
         http
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
@@ -61,6 +60,13 @@ class SecurityConfig(
         http.addFilterAfter(tenantContextFilter, BearerTokenAuthenticationFilter::class.java)
         return http.build()
     }
+
+    @Bean
+    fun tenantContextFilter(): TenantContextFilter =
+        TenantContextFilter(
+            jwtSecuritySettings = jwtSecuritySettings,
+            objectMapper = objectMapper
+        )
 
     @Bean
     fun jwtDecoder(): JwtDecoder {

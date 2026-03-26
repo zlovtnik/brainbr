@@ -7,8 +7,6 @@ import com.networknt.schema.JsonSchemaFactory
 import com.networknt.schema.SpecVersion
 import org.springframework.core.io.ClassPathResource
 import org.springframework.stereotype.Component
-import java.nio.file.Files
-import java.nio.file.Path
 
 class SchemaValidationException(message: String) : RuntimeException(message)
 
@@ -18,25 +16,13 @@ class SchemaValidationService(
 ) {
     private val schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012)
 
-    private val legacyTaxesSchema: JsonSchema = loadSchema(
-        classpathLocation = "schemas/legacy-taxes-v1.schema.json",
-        fallbackPath = Path.of("docs/schemas/legacy-taxes-v1.schema.json")
-    )
+    private val legacyTaxesSchema: JsonSchema = loadSchema("schemas/legacy-taxes-v1.schema.json")
 
-    private val reformTaxesSchema: JsonSchema = loadSchema(
-        classpathLocation = "schemas/reform-taxes-v1.schema.json",
-        fallbackPath = Path.of("docs/schemas/reform-taxes-v1.schema.json")
-    )
+    private val reformTaxesSchema: JsonSchema = loadSchema("schemas/reform-taxes-v1.schema.json")
 
-    private val explainabilityArtifactSchema: JsonSchema = loadSchema(
-        classpathLocation = "schemas/explainability-artifact-v1.schema.json",
-        fallbackPath = Path.of("docs/schemas/explainability-artifact-v1.schema.json")
-    )
+    private val explainabilityArtifactSchema: JsonSchema = loadSchema("schemas/explainability-artifact-v1.schema.json")
 
-    private val splitPaymentEventSchema: JsonSchema = loadSchema(
-        classpathLocation = "schemas/split-payment-event-v1.schema.json",
-        fallbackPath = Path.of("docs/schemas/split-payment-event-v1.schema.json")
-    )
+    private val splitPaymentEventSchema: JsonSchema = loadSchema("schemas/split-payment-event-v1.schema.json")
 
     fun validateLegacyTaxes(payload: Any) {
         validate(schema = legacyTaxesSchema, payload = payload, label = "legacy_taxes")
@@ -81,14 +67,11 @@ class SchemaValidationService(
         }
     }
 
-    private fun loadSchema(classpathLocation: String, fallbackPath: Path): JsonSchema {
+    private fun loadSchema(classpathLocation: String): JsonSchema {
         val content = runCatching {
             ClassPathResource(classpathLocation).inputStream.use { it.readBytes().decodeToString() }
-        }.getOrElse {
-            if (!Files.exists(fallbackPath)) {
-                throw IllegalStateException("Schema not found: $classpathLocation or $fallbackPath")
-            }
-            Files.readString(fallbackPath)
+        }.getOrElse { ex ->
+            throw IllegalStateException("Schema not found on classpath: $classpathLocation", ex)
         }
 
         return schemaFactory.getSchema(content)

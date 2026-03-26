@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS inventory_transition (
     last_llm_audit     TIMESTAMPTZ,
     llm_model_used     VARCHAR(100),
     vector_id          UUID REFERENCES fiscal_knowledge_base(id),
-    audit_confidence   NUMERIC(4,3) CHECK (audit_confidence BETWEEN 0 AND 1),
+    audit_confidence   NUMERIC(4,3),
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (sku_id, company_id),

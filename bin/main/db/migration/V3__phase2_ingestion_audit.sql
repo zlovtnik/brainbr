@@ -64,7 +64,7 @@ ALTER TABLE inventory_transition
 
 ALTER TABLE inventory_transition
     ADD CONSTRAINT inventory_transition_vector_id_fkey
-    FOREIGN KEY (vector_id) REFERENCES fiscal_knowledge_chunk(id) ON DELETE SET NULL;
+    FOREIGN KEY (vector_id) REFERENCES fiscal_knowledge_chunk(id);
 
 ALTER TABLE fiscal_knowledge_chunk ENABLE ROW LEVEL SECURITY;
 
@@ -115,4 +115,11 @@ CREATE POLICY fiscal_audit_log_insert ON fiscal_audit_log
     FOR INSERT
     WITH CHECK (company_id = NULLIF(current_setting('app.current_company_id', true), '')::uuid);
 
+CREATE POLICY fiscal_audit_log_update ON fiscal_audit_log
+    FOR UPDATE
+    USING (company_id = NULLIF(current_setting('app.current_company_id', true), '')::uuid)
+    WITH CHECK (company_id = NULLIF(current_setting('app.current_company_id', true), '')::uuid);
 
+CREATE POLICY fiscal_audit_log_delete ON fiscal_audit_log
+    FOR DELETE
+    USING (company_id = NULLIF(current_setting('app.current_company_id', true), '')::uuid);
