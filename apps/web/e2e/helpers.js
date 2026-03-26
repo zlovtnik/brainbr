@@ -10,11 +10,19 @@ export function createToken(payload) {
 }
 
 export async function resetMockApi(request) {
-	await request.post(`http://127.0.0.1:${mockApiPort}/__reset`, {
-		headers: {
-			Authorization: `Bearer ${createToken({ sub: 'reset-user' })}`
+	const url = `http://127.0.0.1:${mockApiPort}/__reset`;
+	const headers = { Authorization: `Bearer ${createToken({ sub: 'reset-user' })}` };
+
+	try {
+		const response = await request.post(url, { headers });
+		if (!response.ok()) {
+			const bodyText = await response.text();
+			throw new Error(`resetMockApi: POST ${url} failed with status ${response.status()}: ${bodyText}`);
 		}
-	});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(`resetMockApi: unable to reach mock API at ${url}: ${message}`);
+	}
 }
 
 export async function bootstrapSession(
