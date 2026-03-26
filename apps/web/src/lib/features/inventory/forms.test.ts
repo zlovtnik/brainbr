@@ -25,6 +25,9 @@ describe('inventory form parser', () => {
 		);
 
 		expect(result.success).toBe(true);
+		if (!result.success) {
+			throw new Error('Expected successful inventory form parsing');
+		}
 		expect(result.data).toEqual({
 			sku_id: 'SKU-900',
 			description: 'Premium soda',

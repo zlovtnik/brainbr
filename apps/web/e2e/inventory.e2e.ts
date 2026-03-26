@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+const mockApiPort = Number(process.env.MOCK_API_PORT || 5050);
+
 function createToken(payload: Record<string, unknown>) {
 	const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
 	const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -8,7 +10,7 @@ function createToken(payload: Record<string, unknown>) {
 }
 
 test.beforeEach(async ({ request }) => {
-	await request.post('http://127.0.0.1:5050/__reset', {
+	await request.post(`http://127.0.0.1:${mockApiPort}/__reset`, {
 		headers: {
 			Authorization: `Bearer ${createToken({ sub: 'reset-user' })}`
 		}

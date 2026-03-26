@@ -3,6 +3,7 @@ package br.fiscalbrain.api
 import br.fiscalbrain.audit.AuditService
 import br.fiscalbrain.inventory.InventoryDeleteResponse
 import br.fiscalbrain.inventory.InventoryListFilters
+import br.fiscalbrain.inventory.InventoryListQuery
 import br.fiscalbrain.inventory.InventoryListResponse
 import br.fiscalbrain.inventory.InventoryService
 import br.fiscalbrain.inventory.InventorySkuResponse
@@ -13,11 +14,10 @@ import br.fiscalbrain.audit.ReAuditResponse
 import br.fiscalbrain.core.web.RequestContextKeys
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
-import jakarta.validation.constraints.Max
-import jakarta.validation.constraints.Min
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.ModelAttribute
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
@@ -46,31 +46,8 @@ class InventoryController(
 
     @GetMapping
     fun list(
-        @RequestParam(defaultValue = "1")
-        @Min(1)
-        page: Int,
-        @RequestParam(defaultValue = "50")
-        @Min(1)
-        @Max(100)
-        limit: Int,
-        @RequestParam(name = "include_inactive", defaultValue = "false")
-        includeInactive: Boolean,
-        @RequestParam(required = false)
-        query: String?,
-        @RequestParam(name = "sort_by", required = false)
-        sortBy: String?,
-        @RequestParam(name = "sort_order", required = false)
-        sortOrder: String?
-    ): InventoryListResponse = inventoryService.list(
-        InventoryListFilters.from(
-            page = page,
-            limit = limit,
-            includeInactive = includeInactive,
-            query = query,
-            sortBy = sortBy,
-            sortOrder = sortOrder
-        )
-    )
+        @Valid @ModelAttribute query: InventoryListQuery
+    ): InventoryListResponse = inventoryService.list(InventoryListFilters.from(query))
 
     @PutMapping("/{skuId}")
     fun update(

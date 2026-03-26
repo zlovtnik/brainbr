@@ -4,6 +4,15 @@ import { mapInventoryRecord } from '$lib/features/inventory/types';
 import { requireSession } from '$lib/server/auth';
 import type { PageServerLoad } from './$types';
 
+function getSuccessMessage(saved: string | null): string | null {
+	const messages = {
+		created: 'SKU created successfully.',
+		updated: 'SKU updated successfully.'
+	} as const;
+
+	return saved ? messages[saved as keyof typeof messages] ?? null : null;
+}
+
 export const load: PageServerLoad = async (event) => {
 	requireSession(event);
 
@@ -11,12 +20,7 @@ export const load: PageServerLoad = async (event) => {
 		const item = await createApiClientFromEvent(event).getInventorySku(event.params.skuId, true);
 		return {
 			item: mapInventoryRecord(item),
-			successMessage:
-				event.url.searchParams.get('saved') === 'created'
-					? 'SKU created successfully.'
-					: event.url.searchParams.get('saved') === 'updated'
-						? 'SKU updated successfully.'
-						: null
+			successMessage: getSuccessMessage(event.url.searchParams.get('saved'))
 		};
 	} catch (cause) {
 		if (cause instanceof ApiClientError && cause.status === 404) {

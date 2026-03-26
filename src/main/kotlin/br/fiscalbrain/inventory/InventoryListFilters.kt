@@ -11,6 +11,15 @@ data class InventoryListFilters(
     val sortOrder: InventorySortOrder
 ) {
     companion object {
+        fun from(query: InventoryListQuery): InventoryListFilters = from(
+            page = query.page,
+            limit = query.limit,
+            includeInactive = query.includeInactive,
+            query = query.query,
+            sortBy = query.sortBy,
+            sortOrder = query.sortOrder
+        )
+
         fun from(
             page: Int,
             limit: Int,

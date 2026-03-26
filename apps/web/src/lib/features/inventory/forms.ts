@@ -7,12 +7,23 @@ import type {
 
 type InventoryFormMode = 'create' | 'edit';
 
-export interface InventoryFormResult {
-	success: boolean;
+type InventoryFormPayload = Omit<InventoryWriteTransport, 'sku_id'> & { sku_id?: string };
+
+interface InventoryFormFailure {
+	success: false;
 	values: InventoryFormValues;
 	errors: InventoryFormErrors;
-	data?: InventoryWriteTransport;
 }
+
+interface InventoryFormSuccess<TData extends InventoryFormPayload> {
+	success: true;
+	values: InventoryFormValues;
+	errors: InventoryFormErrors;
+	data: TData;
+}
+
+export type InventoryCreateFormResult = InventoryFormSuccess<InventoryWriteTransport> | InventoryFormFailure;
+export type InventoryEditFormResult = InventoryFormSuccess<InventoryFormPayload> | InventoryFormFailure;
 
 function getString(formData: FormData, key: string): string {
 	return formData.get(key)?.toString().trim() ?? '';
@@ -37,7 +48,12 @@ function parseRate(
 	return parsed;
 }
 
-export function parseInventoryForm(formData: FormData, mode: InventoryFormMode): InventoryFormResult {
+export function parseInventoryForm(formData: FormData, mode: 'create'): InventoryCreateFormResult;
+export function parseInventoryForm(formData: FormData, mode: 'edit'): InventoryEditFormResult;
+export function parseInventoryForm(
+	formData: FormData,
+	mode: InventoryFormMode
+): InventoryCreateFormResult | InventoryEditFormResult {
 	const values: InventoryFormValues = {
 		skuId: getString(formData, 'skuId'),
 		description: getString(formData, 'description'),
@@ -87,17 +103,31 @@ export function parseInventoryForm(formData: FormData, mode: InventoryFormMode):
 		return { success: false, values, errors };
 	}
 
+	const data = {
+		sku_id: mode === 'create' ? values.skuId : values.skuId || undefined,
+		description: values.description,
+		ncm_code: values.ncmCode,
+		origin_state: values.originState,
+		destination_state: values.destinationState,
+		legacy_taxes: legacyTaxes
+	};
+
+	if (mode === 'create') {
+		return {
+			success: true,
+			values,
+			errors,
+			data: {
+				...data,
+				sku_id: values.skuId
+			}
+		};
+	}
+
 	return {
 		success: true,
 		values,
 		errors,
-		data: {
-			sku_id: values.skuId,
-			description: values.description,
-			ncm_code: values.ncmCode,
-			origin_state: values.originState,
-			destination_state: values.destinationState,
-			legacy_taxes: legacyTaxes
-		}
+		data
 	};
 }

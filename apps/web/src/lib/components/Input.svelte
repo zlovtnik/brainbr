@@ -16,7 +16,7 @@
 		id,
 		name,
 		label,
-		value = '',
+		value = $bindable(''),
 		type = 'text',
 		error,
 		hint,
@@ -25,13 +25,14 @@
 		readonly = false
 	}: Props = $props();
 
+	let labelId = $derived(`${id}-label`);
 	let describedBy = $derived(
 		[hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(' ') || undefined
 	);
 </script>
 
-<label class="field" for={id}>
-	<span class="field__label">{label}</span>
+<label class="field">
+	<span class="field__label" id={labelId}>{label}</span>
 	{#if hint}
 		<span class="field__hint" id={`${id}-hint`}>{hint}</span>
 	{/if}
@@ -41,10 +42,11 @@
 		{id}
 		{name}
 		{type}
-		{value}
+		bind:value
 		{placeholder}
 		{readonly}
 		{required}
+		aria-labelledby={labelId}
 		aria-invalid={Boolean(error)}
 		aria-describedby={describedBy}
 	/>

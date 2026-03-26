@@ -62,8 +62,9 @@ class OpenAiModelProviderTest {
     }
 
     private fun HttpExchange.respondJson(body: String) {
+        val bytes = body.toByteArray()
         responseHeaders.add("Content-Type", "application/json")
-        sendResponseHeaders(200, body.toByteArray().size.toLong())
-        responseBody.use { it.write(body.toByteArray()) }
+        sendResponseHeaders(200, bytes.size.toLong())
+        responseBody.use { it.write(bytes) }
     }
 }

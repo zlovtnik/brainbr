@@ -7,7 +7,7 @@
 
 <form method="POST">
 	<InventoryEditor
-		cancelHref={`/inventory/${data.item.skuId}`}
+		cancelHref={`/inventory/${encodeURIComponent(data.item.skuId)}`}
 		description="Update the persisted SKU metadata while keeping bearer auth and request forwarding on the server."
 		errors={form?.errors}
 		formError={form?.errors?._form}

@@ -39,9 +39,14 @@ describe('api client', () => {
 			throw new Error('Expected fetch to be called at least once');
 		}
 		const [url, init] = firstCall as unknown as [string, RequestInit];
-		expect(url).toBe(
-			'http://example.test/api/v1/inventory/sku?page=1&limit=10&sort_by=sku_id&sort_order=asc&query=beer&include_inactive=true'
-		);
+		const parsedUrl = new URL(url);
+		expect(`${parsedUrl.origin}${parsedUrl.pathname}`).toBe('http://example.test/api/v1/inventory/sku');
+		expect(parsedUrl.searchParams.get('page')).toBe('1');
+		expect(parsedUrl.searchParams.get('limit')).toBe('10');
+		expect(parsedUrl.searchParams.get('sort_by')).toBe('sku_id');
+		expect(parsedUrl.searchParams.get('sort_order')).toBe('asc');
+		expect(parsedUrl.searchParams.get('query')).toBe('beer');
+		expect(parsedUrl.searchParams.get('include_inactive')).toBe('true');
 		expect((init?.headers as Headers).get('Authorization')).toBe('Bearer demo-token');
 		expect((init?.headers as Headers).get('X-Request-Id')).toBe('req-123');
 	});

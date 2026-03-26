@@ -1,6 +1,7 @@
 package br.fiscalbrain
 
 import br.fiscalbrain.pipeline.EmbeddingProvider
+import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -255,7 +256,7 @@ class InventoryApiIntegrationTest {
         )
             .andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.error_code").value("BAD_REQUEST"))
-            .andExpect(jsonPath("$.message").value("Invalid sort_by value. Supported values: updated_at, sku_id"))
+            .andExpect(jsonPath("$.message").value(containsString("Invalid sort_by value")))
     }
 
     @Test

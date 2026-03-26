@@ -21,14 +21,10 @@ export const actions: Actions = {
 		if (!parsed.success) {
 			return fail(400, parsed);
 		}
-		const payload = parsed.data;
-		if (!payload) {
-			throw new Error('Expected inventory payload after successful form parsing');
-		}
 
 		try {
-			const result = await createApiClientFromEvent(event).createInventorySku(payload);
-			throw redirect(303, `/inventory/${result.sku_id}?saved=created`);
+			const result = await createApiClientFromEvent(event).createInventorySku(parsed.data);
+			throw redirect(303, `/inventory/${encodeURIComponent(result.sku_id)}?saved=created`);
 		} catch (error) {
 			if (error instanceof ApiClientError) {
 				return fail(error.status, {

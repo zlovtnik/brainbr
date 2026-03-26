@@ -91,6 +91,7 @@ export function createApiClient(options: ApiClientOptions) {
 	}
 
 	const authToken = token;
+	const apiBase = getApiBaseUrl();
 	const runFetch = options.fetch ?? globalThis.fetch;
 	const requestId = options.requestId ?? randomUUID();
 
@@ -101,7 +102,7 @@ export function createApiClient(options: ApiClientOptions) {
 		try {
 			let response: Response;
 			try {
-				response = await runFetch(`${getApiBaseUrl()}${path}`, {
+				response = await runFetch(`${apiBase}${path}`, {
 					...init,
 					signal: controller.signal,
 					headers: createHeaders(authToken, requestId, Boolean(init?.body))

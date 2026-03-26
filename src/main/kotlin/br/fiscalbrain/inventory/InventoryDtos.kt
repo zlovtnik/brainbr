@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
+import org.springframework.web.bind.annotation.BindParam
 import java.time.Instant
 
 data class InventoryWriteRequest(
@@ -100,11 +101,14 @@ data class InventoryListQuery(
     @field:Min(1)
     @field:Max(100)
     val limit: Int = 50,
+    @param:BindParam("include_inactive")
     @JsonProperty("include_inactive")
     val includeInactive: Boolean = false,
     val query: String? = null,
+    @param:BindParam("sort_by")
     @JsonProperty("sort_by")
     val sortBy: String? = null,
+    @param:BindParam("sort_order")
     @JsonProperty("sort_order")
     val sortOrder: String? = null
 )

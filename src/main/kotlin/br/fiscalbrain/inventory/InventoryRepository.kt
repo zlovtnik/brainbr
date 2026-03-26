@@ -6,7 +6,6 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Repository
 import java.sql.ResultSet
-import java.util.Locale
 import java.util.UUID
 
 @Repository
@@ -188,7 +187,6 @@ class InventoryRepository(
             .replace("\\", "\\\\")
             .replace("%", "\\%")
             .replace("_", "\\_")
-            .lowercase(Locale.ROOT)
         return "%$escaped%"
     }
 }

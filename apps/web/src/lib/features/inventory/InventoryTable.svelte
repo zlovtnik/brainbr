@@ -4,6 +4,7 @@
 	import InlineNotice from '$lib/components/InlineNotice.svelte';
 	import TableShell from '$lib/components/TableShell.svelte';
 	import type { InventoryListView } from '$lib/features/inventory/types';
+	import { formatInventoryTimestamp } from '$lib/utils/date';
 
 	interface Props {
 		inventory: InventoryListView | null;
@@ -41,8 +42,8 @@
 					<td>
 						<Badge text={item.isActive ? 'Active' : 'Inactive'} variant={item.isActive ? 'success' : 'warning'} />
 					</td>
-					<td>{new Date(item.updatedAt).toLocaleString()}</td>
-					<td><a class="table-link" href={`/inventory/${item.skuId}`}>View</a></td>
+					<td>{formatInventoryTimestamp(item.updatedAt)}</td>
+					<td><a class="table-link" href={`/inventory/${encodeURIComponent(item.skuId)}`}>View</a></td>
 				</tr>
 			{/each}
 		</tbody>

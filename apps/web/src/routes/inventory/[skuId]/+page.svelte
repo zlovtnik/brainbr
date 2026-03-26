@@ -1,7 +1,10 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import Badge from '$lib/components/Badge.svelte';
+	import Button from '$lib/components/Button.svelte';
 	import Card from '$lib/components/Card.svelte';
 	import InlineNotice from '$lib/components/InlineNotice.svelte';
+	import { formatInventoryTimestamp } from '$lib/utils/date';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -9,8 +12,11 @@
 
 <svelte:head>
 	<title>{data.item.skuId} | Inventory</title>
-	<meta name="description" content="Inventory detail for SKU {data.item.skuId}: {data.item.description}" />
-	<link rel="canonical" href="/inventory/{data.item.skuId}" />
+	<meta
+		name="description"
+		content={`Inventory detail for SKU ${data.item.skuId}: ${data.item.description}`}
+	/>
+	<link rel="canonical" href={`${page.url.origin}/inventory/${encodeURIComponent(data.item.skuId)}`} />
 </svelte:head>
 
 <section class="stack">
@@ -24,7 +30,9 @@
 			<h1 class="headline">{data.item.skuId}</h1>
 			<p class="lede">{data.item.description}</p>
 		</div>
-		<a class="detail-link" href={`/inventory/${data.item.skuId}/edit`}>Edit SKU</a>
+		<Button href={`/inventory/${encodeURIComponent(data.item.skuId)}/edit`}>
+			{#snippet children()}Edit SKU{/snippet}
+		</Button>
 	</div>
 
 	{#if data.successMessage}
@@ -44,7 +52,7 @@
 		</Card>
 		<Card>
 			<p class="eyebrow">Last updated</p>
-			<h2>{new Date(data.item.updatedAt).toLocaleString()}</h2>
+			<h2>{formatInventoryTimestamp(data.item.updatedAt)}</h2>
 			<p class="lede">Timestamp returned by the backend inventory contract.</p>
 		</Card>
 	</div>
@@ -116,19 +124,5 @@
 	dt,
 	dd {
 		margin: 0;
-	}
-
-	.detail-link {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 2.9rem;
-		padding: 0.8rem 1.15rem;
-		border-radius: 999px;
-		background: linear-gradient(135deg, var(--color-accent) 0%, #15865a 100%);
-		color: white;
-		text-decoration: none;
-		font-weight: 700;
-		box-shadow: var(--shadow-soft);
 	}
 </style>

@@ -37,7 +37,7 @@ describe('InventoryTable', () => {
 		expect(screen.getByText('Active')).toBeTruthy();
 	});
 
-	it('renders empty and error states', () => {
+	it('renders empty and error states', async () => {
 		const { rerender } = render(InventoryTable, {
 			props: {
 				inventory: { ...inventory, items: [], totalCount: 0 }
@@ -46,7 +46,7 @@ describe('InventoryTable', () => {
 
 		expect(screen.getByText('No inventory matched')).toBeTruthy();
 
-		rerender({
+		await rerender({
 			inventory: null,
 			loadError: 'Backend unavailable'
 		});

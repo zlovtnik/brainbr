@@ -1,7 +1,12 @@
 import { redirect, type RequestEvent } from '@sveltejs/kit';
 
 export function sanitizeRedirectTo(redirectTo: string | null | undefined, fallback = '/inventory'): string {
-	if (redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')) {
+	if (
+		redirectTo &&
+		redirectTo.startsWith('/') &&
+		!redirectTo.startsWith('//') &&
+		!redirectTo.includes('\\')
+	) {
 		return redirectTo;
 	}
 

@@ -1,18 +1,36 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
 
-	interface Props extends HTMLButtonAttributes {
+	type Props = Omit<HTMLButtonAttributes, 'children' | 'class'> &
+		Omit<HTMLAnchorAttributes, 'children' | 'class' | 'href'> & {
 		children: Snippet;
 		variant?: 'primary' | 'secondary' | 'ghost';
-	}
+		href?: string;
+		class?: string;
+	};
 
-	let { children, variant = 'primary', type = 'button', ...rest }: Props = $props();
+	let {
+		children,
+		variant = 'primary',
+		type = 'button',
+		href,
+		class: className = '',
+		...rest
+	}: Props = $props();
+
+	let classes = $derived(`button button--${variant}${className ? ` ${className}` : ''}`);
 </script>
 
-<button class={`button button--${variant}`} {type} {...rest}>
-	{@render children()}
-</button>
+{#if href}
+	<a class={classes} {href} {...rest}>
+		{@render children()}
+	</a>
+{:else}
+	<button class={classes} {type} {...rest}>
+		{@render children()}
+	</button>
+{/if}
 
 <style>
 	.button {

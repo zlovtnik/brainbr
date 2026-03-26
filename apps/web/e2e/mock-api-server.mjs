@@ -34,6 +34,13 @@ function sendJson(response, status, body) {
 	response.end(JSON.stringify(body));
 }
 
+function getSkuIdFromPath(pathname) {
+	const normalizedPath = pathname.replace(/\/+$/, '');
+	const segments = normalizedPath.split('/').filter(Boolean);
+	const skuSegment = segments.at(-1);
+	return skuSegment ? decodeURIComponent(skuSegment) : '';
+}
+
 function requireAuth(request, response) {
 	if (!request.headers.authorization?.startsWith('Bearer ')) {
 		sendJson(response, 401, {
@@ -142,7 +149,14 @@ const server = createServer(async (request, response) => {
 		}
 
 		if (request.method === 'GET' && url.pathname.startsWith('/api/v1/inventory/sku/')) {
-			const skuId = decodeURIComponent(url.pathname.split('/').pop() || '');
+			const skuId = getSkuIdFromPath(url.pathname);
+			if (!skuId) {
+				return sendJson(response, 400, {
+					error_code: 'BAD_REQUEST',
+					message: 'SKU path segment is required',
+					request_id: 'mock-req'
+				});
+			}
 			const item = inventory.find((entry) => entry.sku_id === skuId);
 			if (!item) {
 				return sendJson(response, 404, {
@@ -155,7 +169,14 @@ const server = createServer(async (request, response) => {
 		}
 
 		if (request.method === 'PUT' && url.pathname.startsWith('/api/v1/inventory/sku/')) {
-			const skuId = decodeURIComponent(url.pathname.split('/').pop() || '');
+			const skuId = getSkuIdFromPath(url.pathname);
+			if (!skuId) {
+				return sendJson(response, 400, {
+					error_code: 'BAD_REQUEST',
+					message: 'SKU path segment is required',
+					request_id: 'mock-req'
+				});
+			}
 			const item = inventory.find((entry) => entry.sku_id === skuId);
 			if (!item) {
 				return sendJson(response, 404, {

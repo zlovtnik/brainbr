@@ -33,16 +33,16 @@
 
 	.notice--info {
 		background: var(--color-accent-soft);
-		border-color: rgba(15, 122, 77, 0.25);
+		border-color: var(--color-info-border);
 	}
 
 	.notice--success {
 		background: var(--color-success-soft);
-		border-color: rgba(12, 109, 82, 0.28);
+		border-color: var(--color-success-border);
 	}
 
 	.notice--error {
 		background: var(--color-danger-soft);
-		border-color: rgba(178, 59, 47, 0.28);
+		border-color: var(--color-error-border);
 	}
 </style>

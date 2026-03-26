@@ -17,9 +17,10 @@ describe('Input', () => {
 			}
 		});
 
-		const input = screen.getByRole('textbox');
+		const input = screen.getByLabelText('Description');
 		expect(input).toBeTruthy();
 		expect((input as HTMLInputElement).value).toBe('Sparkling water');
+		expect(screen.getByText('Description')).toBeTruthy();
 		expect(screen.getByText('Visible to analysts.')).toBeTruthy();
 		expect(screen.getByText('Description is required.')).toBeTruthy();
 	});

@@ -10,9 +10,10 @@ export const load: PageServerLoad = async (event) => {
 
 	try {
 		const item = await createApiClientFromEvent(event).getInventorySku(event.params.skuId, true);
+		const mapped = mapInventoryRecord(item);
 		return {
-			item: mapInventoryRecord(item),
-			initialValues: toInventoryFormValues(mapInventoryRecord(item))
+			item: mapped,
+			initialValues: toInventoryFormValues(mapped)
 		};
 	} catch (cause) {
 		if (cause instanceof ApiClientError && cause.status === 404) {
@@ -34,16 +35,10 @@ export const actions: Actions = {
 		if (!parsed.success) {
 			return fail(400, parsed);
 		}
-		const parsedData = parsed.data;
-		if (!parsedData) {
-			throw new Error('Expected inventory payload after successful form parsing');
-		}
-
-		const { sku_id: _skuId, ...payload } = parsedData;
+		const { sku_id: _skuId, ...payload } = parsed.data;
 
 		try {
 			await createApiClientFromEvent(event).updateInventorySku(event.params.skuId, payload);
-			throw redirect(303, `/inventory/${event.params.skuId}?saved=updated`);
 		} catch (cause) {
 			if (cause instanceof ApiClientError) {
 				return fail(cause.status, {
@@ -54,5 +49,7 @@ export const actions: Actions = {
 			}
 			throw cause;
 		}
+
+		throw redirect(303, `/inventory/${encodeURIComponent(event.params.skuId)}?saved=updated`);
 	}
 };

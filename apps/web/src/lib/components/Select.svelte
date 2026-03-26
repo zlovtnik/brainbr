@@ -14,11 +14,19 @@
 	}
 
 	let { id, name, label, value, options, error }: Props = $props();
+	let errorId = $derived(error ? `${id}-error` : undefined);
 </script>
 
 <label class="field" for={id}>
 	<span class="field__label">{label}</span>
-	<select class="field__select" class:field__select--error={Boolean(error)} {id} {name} aria-invalid={Boolean(error)}>
+	<select
+		class="field__select"
+		class:field__select--error={Boolean(error)}
+		{id}
+		{name}
+		aria-errormessage={errorId}
+		aria-invalid={Boolean(error)}
+	>
 		{#each options as option}
 			<option selected={option.value === value} value={option.value}>
 				{option.label}
@@ -26,7 +34,7 @@
 		{/each}
 	</select>
 	{#if error}
-		<span class="field__error">{error}</span>
+		<span class="field__error" id={errorId}>{error}</span>
 	{/if}
 </label>
 
