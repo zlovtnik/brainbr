@@ -32,6 +32,7 @@ Open-source fiscal engine for the Brazilian tax reform transition (EC 132/2023),
 - [Backlog](docs/backlog.md)
 - [Testing and Quality](docs/testing-quality.md)
 - [Operations and Security](docs/operations-security.md)
+- [Interactive Svelte 5 Project Guide](docs/svelte5-interactive-project.md)
 - [ADR-001 Tenant Isolation Baseline](docs/adr-001-tenant-and-traceability-baseline.md)
 - [HELP](HELP.md)
 - [SQL README](sql/README.md)
