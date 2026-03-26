@@ -58,7 +58,7 @@ class OpenAiModelProviderTest {
             )
         }
 
-        assertTrue(ex.message!!.contains("audit_confidence"))
+        assertTrue(ex.message?.contains("audit_confidence") == true)
     }
 
     private fun HttpExchange.respondJson(body: String) {
