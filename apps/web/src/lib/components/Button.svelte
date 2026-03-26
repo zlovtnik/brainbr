@@ -4,11 +4,11 @@
 
 	type Props = Omit<HTMLButtonAttributes, 'children' | 'class'> &
 		Omit<HTMLAnchorAttributes, 'children' | 'class' | 'href'> & {
-		children: Snippet;
-		variant?: 'primary' | 'secondary' | 'ghost';
-		href?: string;
-		class?: string;
-	};
+			children: Snippet;
+			variant?: 'primary' | 'secondary' | 'ghost';
+			href?: string;
+			class?: string;
+		};
 
 	let {
 		children,
@@ -38,7 +38,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: var(--space-2);
-		min-height: 2.9rem;
+		min-height: 2.75rem;
 		padding: 0.8rem 1.15rem;
 		border-radius: 999px;
 		border: 1px solid transparent;
@@ -68,7 +68,7 @@
 		color: var(--color-accent-strong);
 		border-color: var(--color-border);
 	}
-	
+
 	.button:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;

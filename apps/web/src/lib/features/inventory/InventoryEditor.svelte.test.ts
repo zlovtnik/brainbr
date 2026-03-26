@@ -36,5 +36,9 @@ describe('InventoryEditor', () => {
 		expect(screen.getByDisplayValue('SKU-001')).toBeTruthy();
 		expect(screen.getByText('The backend rejected the update.')).toBeTruthy();
 		expect(screen.getByText('Description is required.')).toBeTruthy();
+		expect(screen.getByText('Fix the following fields before continuing.')).toBeTruthy();
+		expect(
+			screen.getByRole('link', { name: 'Description: Description is required.' })
+		).toBeTruthy();
 	});
 });

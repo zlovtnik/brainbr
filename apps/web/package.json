@@ -14,7 +14,8 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest run",
 		"test": "bun run test:unit",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"test:e2e:ci": "playwright test --reporter=line"
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.11.0",

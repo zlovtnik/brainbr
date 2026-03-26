@@ -10,7 +10,7 @@
 	let { title, message, action }: Props = $props();
 </script>
 
-<section class="empty-state">
+<section class="empty-state" role="status">
 	<h2>{title}</h2>
 	<p>{message}</p>
 	{#if action}

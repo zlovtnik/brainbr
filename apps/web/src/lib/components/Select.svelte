@@ -25,6 +25,7 @@
 		{id}
 		{name}
 		aria-errormessage={errorId}
+		aria-describedby={errorId}
 		aria-invalid={Boolean(error)}
 	>
 		{#each options as option}

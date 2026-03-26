@@ -1,10 +1,20 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import '$lib/styles/app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
 	let authenticated = $derived(Boolean(data.session?.authenticated));
+	let mainContent: HTMLElement | undefined;
+
+	afterNavigate(({ from }) => {
+		if (!from) {
+			return;
+		}
+
+		mainContent?.focus();
+	});
 </script>
 
 <svelte:head>
@@ -49,7 +59,7 @@
 		</section>
 	{/if}
 
-	<main id="main-content">
+	<main bind:this={mainContent} id="main-content" tabindex="-1">
 		{@render children()}
 	</main>
 
@@ -119,6 +129,12 @@
 	main {
 		display: grid;
 		gap: var(--space-5);
+	}
+
+	main:focus-visible {
+		border-radius: var(--radius-lg);
+		outline: 3px solid var(--color-accent);
+		outline-offset: 4px;
 	}
 
 	.shell-footer {

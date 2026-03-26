@@ -40,9 +40,12 @@
 <section class="stack">
 	<div class="stack">
 		<p class="eyebrow">Inventory workflow</p>
-		<h1 class="headline">Search the tenant catalog, inspect tax payloads, and move directly into edits.</h1>
+		<h1 class="headline">
+			Search the tenant catalog, inspect tax payloads, and move directly into edits.
+		</h1>
 		<p class="lede">
-			The list is server-rendered from the Spring API and keeps query, sort, and activity filters in the URL.
+			The list is server-rendered from the Spring API and keeps query, sort, and activity filters in
+			the URL.
 		</p>
 	</div>
 
@@ -56,10 +59,16 @@
 			</div>
 		{/snippet}
 
-		<form class="filters" method="GET">
+		<form aria-describedby="inventory-filter-help" class="filters" method="GET" role="search">
 			<label class="filters__search" for="query">
 				<span>Search</span>
-				<input id="query" name="query" placeholder="SKU, description, or NCM code" type="search" value={data.filters.query} />
+				<input
+					id="query"
+					name="query"
+					placeholder="SKU, description, or NCM code"
+					type="search"
+					value={data.filters.query}
+				/>
 			</label>
 
 			<Select
@@ -85,7 +94,12 @@
 			/>
 
 			<label class="filters__toggle">
-				<input checked={data.filters.includeInactive} name="includeInactive" type="checkbox" value="true" />
+				<input
+					checked={data.filters.includeInactive}
+					name="includeInactive"
+					type="checkbox"
+					value="true"
+				/>
 				<span>Include inactive SKUs</span>
 			</label>
 
@@ -95,6 +109,10 @@
 				</Button>
 				<a class="text-link" href="/inventory/new">Create SKU</a>
 			</div>
+
+			<p class="sr-only" id="inventory-filter-help">
+				Search by SKU, description, or NCM code, then apply filters to reload the current page.
+			</p>
 		</form>
 	</Card>
 
@@ -111,20 +129,28 @@
 		</Card>
 	</div>
 
-	<InventoryTable inventory={data.inventory} loadError={data.loadError ?? undefined} successMessage={data.successMessage ?? undefined} />
+	<InventoryTable
+		inventory={data.inventory}
+		loadError={data.loadError ?? undefined}
+		successMessage={data.successMessage ?? undefined}
+	/>
 
 	{#if data.inventory}
 		<nav aria-label="Pagination" class="pager">
 			{#if data.filters.page > 1}
 				<a class="text-link" href={buildPageHref(data.filters.page - 1)}>Previous page</a>
 			{:else}
-				<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1">Previous page</span>
+				<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1"
+					>Previous page</span
+				>
 			{/if}
 			<span>Page {data.filters.page}</span>
 			{#if data.inventory.hasMore}
 				<a class="text-link" href={buildPageHref(data.filters.page + 1)}>Next page</a>
 			{:else}
-				<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1">Next page</span>
+				<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1"
+					>Next page</span
+				>
 			{/if}
 		</nav>
 	{/if}
@@ -163,6 +189,13 @@
 	}
 
 	.text-link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 2.75rem;
+		padding: 0.55rem 0.95rem;
+		border-radius: 999px;
+		border: 1px solid transparent;
 		font-weight: 700;
 		color: var(--color-accent-strong);
 		text-decoration: none;
@@ -171,6 +204,8 @@
 	.text-link--disabled {
 		color: var(--color-ink-muted);
 		cursor: not-allowed;
+		border-color: var(--color-border);
+		background: rgba(255, 255, 255, 0.4);
 	}
 
 	.pager {

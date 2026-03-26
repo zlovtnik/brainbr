@@ -26,8 +26,9 @@
 	}: Props = $props();
 
 	let labelId = $derived(`${id}-label`);
+	let errorId = $derived(error ? `${id}-error` : undefined);
 	let describedBy = $derived(
-		[hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(' ') || undefined
+		[hint ? `${id}-hint` : null, errorId].filter(Boolean).join(' ') || undefined
 	);
 </script>
 
@@ -49,9 +50,10 @@
 		aria-labelledby={labelId}
 		aria-invalid={Boolean(error)}
 		aria-describedby={describedBy}
+		aria-errormessage={errorId}
 	/>
 	{#if error}
-		<span class="field__error" id={`${id}-error`}>{error}</span>
+		<span class="field__error" id={errorId}>{error}</span>
 	{/if}
 </label>
 

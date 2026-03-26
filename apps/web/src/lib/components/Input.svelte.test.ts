@@ -20,6 +20,7 @@ describe('Input', () => {
 		const input = screen.getByLabelText('Description');
 		expect(input).toBeTruthy();
 		expect((input as HTMLInputElement).value).toBe('Sparkling water');
+		expect((input as HTMLInputElement).getAttribute('aria-errormessage')).toBe('description-error');
 		expect(screen.getByText('Description')).toBeTruthy();
 		expect(screen.getByText('Visible to analysts.')).toBeTruthy();
 		expect(screen.getByText('Description is required.')).toBeTruthy();

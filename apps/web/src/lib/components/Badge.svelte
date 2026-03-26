@@ -7,7 +7,7 @@
 	let { text, variant = 'neutral' }: Props = $props();
 </script>
 
-<span class={`badge badge--${variant}`} role="status" aria-label={text}>{text}</span>
+<span class={`badge badge--${variant}`}>{text}</span>
 
 <style>
 	.badge {

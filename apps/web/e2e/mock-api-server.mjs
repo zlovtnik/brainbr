@@ -120,6 +120,14 @@ const server = createServer(async (request, response) => {
 		}
 
 		if (request.method === 'GET' && url.pathname === '/api/v1/inventory/sku') {
+			if (url.searchParams.get('query')?.toLowerCase() === 'trigger-load-error') {
+				return sendJson(response, 503, {
+					error_code: 'API_NETWORK_ERROR',
+					message: 'Mock backend unavailable for inventory list',
+					request_id: 'mock-req'
+				});
+			}
+
 			return sendJson(response, 200, applyFilters(url.searchParams));
 		}
 
@@ -145,7 +153,10 @@ const server = createServer(async (request, response) => {
 				inventory.unshift(record);
 			}
 
-			return sendJson(response, 200, { sku_id: body.sku_id, status: existing ? 'updated' : 'created' });
+			return sendJson(response, 200, {
+				sku_id: body.sku_id,
+				status: existing ? 'updated' : 'created'
+			});
 		}
 
 		if (request.method === 'GET' && url.pathname.startsWith('/api/v1/inventory/sku/')) {
