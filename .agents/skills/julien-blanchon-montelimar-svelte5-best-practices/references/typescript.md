@@ -66,15 +66,14 @@
 </script>
 ```
 
-### Rest Props with HTML Attributes
-
-```svelte
 <script lang="ts">
   import type { HTMLButtonAttributes } from 'svelte/elements';
+  import type { Snippet } from 'svelte';
 
   interface Props extends HTMLButtonAttributes {
     variant?: 'primary' | 'secondary';
     loading?: boolean;
+    children?: Snippet;
   }
 
   let { variant = 'primary', loading = false, ...rest }: Props = $props();
@@ -83,7 +82,6 @@
 <button class={variant} disabled={loading} {...rest}>
   {#if loading}Loading...{:else}{@render children?.()}{/if}
 </button>
-```
 
 ### Input Element Props
 

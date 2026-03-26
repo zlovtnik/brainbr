@@ -61,13 +61,11 @@ metadata:
 
 ### Callback Props (replacing createEventDispatcher)
 
-```svelte
 <script>
-  let { onclick } = $props();
+  let { onclick, data } = $props();
 </script>
 
-<button onclick={() => onclick?.({ data })}>Click</button>
-```
+<button onclick={() => onclick?.(data)}>Click</button>
 
 ## Common Mistakes
 

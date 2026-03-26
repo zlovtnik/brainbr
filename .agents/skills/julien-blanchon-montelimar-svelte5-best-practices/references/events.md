@@ -197,24 +197,7 @@ Svelte 5 deprecates `createEventDispatcher` in favor of callback props for compo
 
 ### Typed Callbacks with TypeScript
 
-```svelte
-<script lang="ts">
-  interface Props {
-    value?: string;
-    onsearch?: (query: string) => void;
-    onchange?: (value: string) => void;
-    onclear?: () => void;
-  }
 
-  let { value = '', onsearch, onchange, onclear }: Props = $props();
-
-  function handleInput(e: Event) {
-    const newValue = (e.target as HTMLInputElement).value;
-    value = newValue;
-    onchange?.(newValue);
-  }
-</script>
-```
 
 ### Forwarding Native Events
 

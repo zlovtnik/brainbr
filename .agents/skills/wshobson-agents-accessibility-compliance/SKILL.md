@@ -95,8 +95,6 @@ function AccessibleButton({
       disabled={disabled || isLoading}
       // Announce loading state to screen readers
       aria-busy={isLoading}
-      // Describe the button's current state
-      aria-disabled={disabled || isLoading}
       className={cn(
         // Visible focus ring
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
@@ -179,6 +177,8 @@ function AccessibleDialog({ isOpen, onClose, title, children }: DialogProps) {
         <div className="fixed inset-0 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg shadow-lg max-w-md w-full p-6">
             <h2 id={titleId} className="text-lg font-semibold">
+          <div className="relative bg-background rounded-lg shadow-lg max-w-md w-full p-6">
+            <h2 id={titleId} className="text-lg font-semibold">
               {title}
             </h2>
             <div id={descriptionId}>{children}</div>
@@ -190,8 +190,6 @@ function AccessibleDialog({ isOpen, onClose, title, children }: DialogProps) {
               <X className="h-4 w-4" />
             </button>
           </div>
-        </div>
-      </FocusTrap>
     </div>
   );
 }
@@ -310,10 +308,14 @@ function Layout({ children }) {
 ```tsx
 function useAnnounce() {
   const [message, setMessage] = React.useState("");
+function useAnnounce() {
+  const [message, setMessage] = React.useState("");
+  const [priority, setPriority] = React.useState<"polite" | "assertive">("polite");
 
   const announce = React.useCallback(
-    (text: string, priority: "polite" | "assertive" = "polite") => {
+    (text: string, announcePriority: "polite" | "assertive" = "polite") => {
       setMessage(""); // Clear first to ensure re-announcement
+      setPriority(announcePriority);
       setTimeout(() => setMessage(text), 100);
     },
     [],
@@ -322,7 +324,7 @@ function useAnnounce() {
   const Announcer = () => (
     <div
       role="status"
-      aria-live="polite"
+      aria-live={priority}
       aria-atomic="true"
       className="sr-only"
     >
@@ -332,8 +334,6 @@ function useAnnounce() {
 
   return { announce, Announcer };
 }
-
-// Usage
 function SearchResults({ results, isLoading }) {
   const { announce, Announcer } = useAnnounce();
 

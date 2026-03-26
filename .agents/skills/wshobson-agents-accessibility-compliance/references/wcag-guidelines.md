@@ -597,8 +597,22 @@ function CustomSlider({ value, min, max, label, onChange }) {
       aria-label={label}
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === "ArrowRight") onChange(Math.min(value + 1, max));
-        if (e.key === "ArrowLeft") onChange(Math.max(value - 1, min));
+        if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+          e.preventDefault();
+          onChange(Math.min(value + 1, max));
+        }
+        if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+          e.preventDefault();
+          onChange(Math.max(value - 1, min));
+        }
+        if (e.key === "Home") {
+          e.preventDefault();
+          onChange(min);
+        }
+        if (e.key === "End") {
+          e.preventDefault();
+          onChange(max);
+        }
       }}
     >
       <div style={{ width: `${((value - min) / (max - min)) * 100}%` }} />
