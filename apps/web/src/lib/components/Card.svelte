@@ -21,23 +21,24 @@
 
 <style>
 	.card {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
-		backdrop-filter: blur(10px);
-		box-shadow: var(--shadow-card);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--bg-2);
+		background-color: var(--bg-2) !important;
+		background-image: none !important;
+		box-shadow: none;
 	}
 
 	.card--padded {
-		padding: var(--space-5);
+		padding: 1.25rem;
 	}
 
 	.card__header {
-		margin-bottom: var(--space-4);
+		margin-bottom: 1rem;
 	}
 
 	.card__body {
 		display: grid;
-		gap: var(--space-4);
+		gap: 1rem;
 	}
 </style>

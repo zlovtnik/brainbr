@@ -46,24 +46,36 @@
 	}
 
 	.field__label {
-		font-weight: 700;
+		font-weight: 500;
+		color: var(--text);
 	}
 
 	.field__select {
+		appearance: none;
 		width: 100%;
-		min-height: 3rem;
-		padding: 0.85rem 1rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.84);
+		min-height: 3.2rem;
+		padding: 0.95rem 2.75rem 0.95rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background-color: var(--bg-2) !important;
+		color: var(--text);
+		background-image:
+			linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+			linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+		background-position:
+			calc(100% - 1.15rem) calc(50% - 0.12rem),
+			calc(100% - 0.8rem) calc(50% - 0.12rem);
+		background-repeat: no-repeat;
+		background-size: 0.42rem 0.42rem;
+		box-shadow: none;
 	}
 
 	.field__select--error {
-		border-color: rgba(178, 59, 47, 0.55);
+		border-color: var(--danger-border);
 	}
 
 	.field__error {
 		font-size: 0.92rem;
-		color: var(--color-danger);
+		color: var(--danger);
 	}
 </style>

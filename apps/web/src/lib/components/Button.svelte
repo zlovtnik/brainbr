@@ -38,35 +38,46 @@
 		align-items: center;
 		justify-content: center;
 		gap: var(--space-2);
-		min-height: 2.75rem;
-		padding: 0.8rem 1.15rem;
-		border-radius: 999px;
-		border: 1px solid transparent;
-		font-weight: 700;
+		min-height: 2rem;
+		padding: 0.38rem 0.85rem;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--border);
+		font-weight: 500;
+		font-size: 0.86rem;
 		text-decoration: none;
 		cursor: pointer;
+		background: var(--bg-2);
+		color: var(--text-muted);
 	}
 
 	.button:hover {
-		transform: translateY(-1px);
+		transform: none;
+		background: var(--bg-3);
+		border-color: var(--border-strong);
+		color: var(--text);
 	}
 
 	.button--primary {
-		background: linear-gradient(135deg, var(--color-accent) 0%, #15865a 100%);
-		color: white;
-		box-shadow: var(--shadow-soft);
+		background: rgba(79, 142, 247, 0.18);
+		color: #8bb5ff;
+		border-color: var(--accent-border);
+	}
+
+	.button--primary:hover {
+		background: rgba(79, 142, 247, 0.24);
+		color: #b6d1ff;
+		border-color: var(--accent);
 	}
 
 	.button--secondary {
-		background: rgba(255, 255, 255, 0.72);
-		color: var(--color-ink);
-		border-color: var(--color-border-strong);
+		background: var(--bg-2);
+		color: var(--text);
 	}
 
 	.button--ghost {
 		background: transparent;
-		color: var(--color-accent-strong);
-		border-color: var(--color-border);
+		color: var(--text-muted);
+		border-color: var(--border);
 	}
 
 	.button:disabled {
@@ -78,5 +89,15 @@
 	.button:disabled:hover {
 		transform: none;
 		box-shadow: none;
+	}
+
+	.button:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--color-focus-ring);
+	}
+
+	.button--secondary:focus-visible,
+	.button--ghost:focus-visible {
+		box-shadow: 0 0 0 3px var(--color-focus-ring);
 	}
 </style>

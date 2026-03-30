@@ -25,9 +25,11 @@
 		display: grid;
 		gap: var(--space-3);
 		padding: var(--space-6);
-		border-radius: var(--radius-lg);
-		border: 1px dashed var(--color-border-strong);
-		background: rgba(255, 255, 255, 0.45);
+		border-radius: var(--radius-md);
+		border: 1px dashed var(--border-strong);
+		background: var(--bg-2);
+		background-color: var(--bg-2) !important;
+		background-image: none !important;
 	}
 
 	h2,
@@ -36,6 +38,6 @@
 	}
 
 	p {
-		color: var(--color-ink-muted);
+		color: var(--text-muted);
 	}
 </style>

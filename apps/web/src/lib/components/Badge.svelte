@@ -13,24 +13,30 @@
 	.badge {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.35rem 0.7rem;
-		border-radius: 999px;
-		font-size: 0.85rem;
-		font-weight: 700;
+		padding: 0.18rem 0.5rem;
+		border-radius: 3px;
+		font-size: 0.72rem;
+		font-weight: 500;
+		font-family: var(--font-mono);
+		letter-spacing: 0.04em;
+		border: 1px solid transparent;
 	}
 
 	.badge--neutral {
-		background: rgba(16, 49, 30, 0.08);
-		color: var(--color-ink);
+		background: var(--danger-soft);
+		color: var(--danger);
+		border-color: var(--danger-border);
 	}
 
 	.badge--success {
-		background: var(--color-success-soft);
-		color: var(--color-success);
+		background: var(--success-soft);
+		color: var(--success);
+		border-color: var(--success-border);
 	}
 
 	.badge--warning {
-		background: var(--color-warning-soft);
-		color: var(--color-warning);
+		background: var(--warning-soft);
+		color: var(--warning);
+		border-color: var(--warning-border);
 	}
 </style>
