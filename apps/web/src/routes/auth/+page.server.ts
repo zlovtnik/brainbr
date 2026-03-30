@@ -74,7 +74,7 @@ export const actions: Actions = {
 	password: async ({ request, cookies }) => {
 		const formData = await request.formData();
 		const username = formData.get('username')?.toString().trim() ?? '';
-		const password = formData.get('password')?.toString() ?? '';
+		const password = formData.get('password')?.toString().trim() ?? '';
 		const redirectTo = sanitizeRedirectTo(formData.get('redirectTo')?.toString());
 
 		const expectedUsername = env.APP_AUTH_HARDCODED_USERNAME?.trim() || DEFAULT_DEMO_USERNAME;

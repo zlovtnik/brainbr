@@ -1,6 +1,14 @@
 <script lang="ts">
 	import Button from '$lib/components/Button.svelte';
-	import type { CapabilityDefinition, CapabilityMetric, SessionShape } from '$lib/capabilities';
+	import SectionPanel from '$lib/components/SectionPanel.svelte';
+	import StatStrip from '$lib/components/StatStrip.svelte';
+	import WorkspaceHeader from '$lib/components/WorkspaceHeader.svelte';
+	import type {
+		CapabilityDefinition,
+		CapabilityMetric,
+		CapabilitySample,
+		SessionShape
+	} from '$lib/capabilities';
 	import { getCapabilityAvailability } from '$lib/capabilities';
 
 	interface LiveMetric extends CapabilityMetric {
@@ -28,21 +36,6 @@
 
 		return 'neutral';
 	}
-
-	let { capability, session = null, liveMetrics = [] }: Props = $props();
-
-	let availability = $derived(getCapabilityAvailability(capability, session?.scopes ?? []));
-	let metrics = $derived([...capability.metrics, ...liveMetrics]);
-	let availabilityText = $derived(
-		availability === 'public'
-			? 'Public surface'
-			: availability === 'available'
-				? 'All required scopes present'
-				: availability === 'partial'
-					? 'Partial scope coverage'
-					: 'Scopes missing'
-	);
-	let primaryEndpoint = $derived(capability.endpoints[0]);
 
 	function metricTone(metric: CapabilityMetric): 'accent' | 'success' | 'warning' | 'default' {
 		const label = metric.label.toLowerCase();
@@ -74,124 +67,201 @@
 	function workflowStateText(status: 'live' | 'guided'): string {
 		return status === 'live' ? 'Live' : 'Guided';
 	}
+
+	function isAuthMetric(metric: CapabilityMetric): boolean {
+		return metric.label.toLowerCase().includes('auth');
+	}
+
+	function isEndpointMetric(metric: CapabilityMetric): boolean {
+		return metric.label.toLowerCase().includes('endpoint');
+	}
+
+	let { capability, session = null, liveMetrics = [] }: Props = $props();
+
+	let availability = $derived(getCapabilityAvailability(capability, session?.scopes ?? []));
+	let availabilityText = $derived(
+		availability === 'public'
+			? 'Public surface'
+			: availability === 'available'
+				? 'All required scopes present'
+				: availability === 'partial'
+					? 'Partial scope coverage'
+					: 'Scopes missing'
+	);
+	let primaryEndpoint = $derived(capability.endpoints[0]);
+	let primaryWorkflowAction = $derived.by(() =>
+		capability.workflows.find(
+			(workflow) => workflow.status === 'live' && workflow.href && workflow.ctaLabel
+		)
+	);
+	let authMetric = $derived.by(
+		() =>
+			capability.metrics.find(isAuthMetric) ?? {
+				label: 'Access',
+				value: availability === 'public' ? 'Public' : availabilityText,
+				detail:
+					availability === 'public'
+						? 'No authentication required for the primary backend surface.'
+						: 'Route access depends on session scope coverage.'
+			}
+	);
+	let operationalMetric = $derived.by(
+		() =>
+			liveMetrics[0] ??
+			capability.metrics.find((metric) => !isAuthMetric(metric) && !isEndpointMetric(metric)) ?? {
+				label: 'Status',
+				value: capability.workflows.some((workflow) => workflow.status === 'live') ? 'Live' : 'Guided',
+				detail: 'Use the workflow list below to move into the next backend capability.'
+			}
+	);
+	let statItems = $derived([
+		{
+			label: authMetric.label,
+			value: authMetric.value,
+			detail: authMetric.detail,
+			tone: metricTone(authMetric)
+		},
+		{
+			label: 'Endpoints',
+			value: String(capability.endpoints.length),
+			detail:
+				capability.endpoints.length === 1
+					? 'One backend route exposed for this capability.'
+					: `${capability.endpoints.length} backend routes exposed for this capability.`,
+			tone: 'accent' as const
+		},
+		{
+			label: operationalMetric.label,
+			value: operationalMetric.value,
+			detail: operationalMetric.detail,
+			tone: metricTone(operationalMetric)
+		}
+	]);
+	let referenceSamples = $derived.by(() => {
+		const samples: CapabilitySample[] = [...(capability.samples ?? [])];
+
+		if (capability.id === 'platform' && liveMetrics.length) {
+			samples.push({
+				title: 'Runtime platform metadata',
+				language: 'json',
+				code: JSON.stringify(
+					{
+						service: liveMetrics.find((metric) => metric.label === 'Service')?.value ?? '',
+						embeddingModel:
+							liveMetrics.find((metric) => metric.label === 'Embedding model')?.value ?? '',
+						llmModel: liveMetrics.find((metric) => metric.label === 'LLM model')?.value ?? ''
+					},
+					null,
+					2
+				)
+			});
+		}
+
+		return samples;
+	});
 </script>
 
 <section class="capability-page">
-	<div class="page-header">
-		<div class="page-header__copy">
-			<div class="page-tag">
-				<span>{primaryEndpoint?.method ?? 'GET'}</span>
-				<span>{primaryEndpoint?.path ?? capability.href}</span>
-			</div>
-			<h1 class="page-title">{capability.navLabel}</h1>
-			<p class="page-desc">{capability.summary}</p>
-		</div>
-		<div class={`status-pill status-pill--${toAvailabilityVariant(availability)}`}>
-			<div class="status-pill__dot"></div>
-			{availabilityText}
-		</div>
-	</div>
+	<WorkspaceHeader
+		tag={[primaryEndpoint?.method ?? 'GET', primaryEndpoint?.path ?? capability.href]}
+		title={capability.navLabel}
+		description={capability.summary}
+		statusLabel={availabilityText}
+		statusTone={toAvailabilityVariant(availability)}
+		primaryAction={primaryWorkflowAction
+			? {
+					label: primaryWorkflowAction.ctaLabel!,
+					href: primaryWorkflowAction.href!
+				}
+			: undefined}
+	/>
 
-	<div class="metrics-bar">
-		{#each metrics as metric}
-			<div class="metric-cell">
-				<p class="metric-label">{metric.label}</p>
-				<h2 class={`metric-value metric-value--${metricTone(metric)}`}>{metric.value}</h2>
-				<p class="metric-sub">{metric.detail}</p>
-			</div>
-		{/each}
-	</div>
+	<StatStrip items={statItems} />
 
 	<div class="body-grid">
-		<section class="body-panel">
-			<div class="panel-title">Workflows</div>
-			<div class="workflow-list">
-				{#each capability.workflows as workflow}
-					<article class="workflow-item">
-						<div class="workflow-item__header">
-							<h3>{workflow.title}</h3>
-							<span class={`workflow-state workflow-state--${workflow.status}`}>
-								<div class="workflow-state__dot"></div>
-								{workflowStateText(workflow.status)}
-							</span>
-						</div>
-						<p class="workflow-item__desc">{workflow.description}</p>
-						{#if workflow.href && workflow.ctaLabel}
-							<div class="workflow-item__action">
-								<Button href={workflow.href} variant="ghost">
-									{#snippet children()}{workflow.ctaLabel}{/snippet}
-								</Button>
+		<SectionPanel
+			title="Workflow guidance"
+			subtitle="Lead with the primary user path and keep support actions attached to each workflow."
+		>
+			{#snippet children()}
+				<div class="workflow-list">
+					{#each capability.workflows as workflow}
+						<article class="workflow-item">
+							<div class="workflow-item__header">
+								<h3>{workflow.title}</h3>
+								<span class={`workflow-state workflow-state--${workflow.status}`}>
+									<div class="workflow-state__dot"></div>
+									{workflowStateText(workflow.status)}
+								</span>
 							</div>
-						{/if}
-					</article>
-				{/each}
-			</div>
-		</section>
+							<p class="workflow-item__desc">{workflow.description}</p>
+							{#if workflow.href && workflow.ctaLabel}
+								<div class="workflow-item__action">
+									<Button
+										href={workflow.href}
+										variant={workflow === primaryWorkflowAction ? 'secondary' : 'ghost'}
+									>
+										{#snippet children()}{workflow.ctaLabel}{/snippet}
+									</Button>
+								</div>
+							{/if}
+						</article>
+					{/each}
+				</div>
+			{/snippet}
+		</SectionPanel>
 
-		<section class="body-panel">
-			<div class="panel-title">Endpoint surface</div>
-			<div class="endpoint-list">
-				{#each capability.endpoints as endpoint}
-					<article class="endpoint-item">
-						<div class="endpoint-item__top">
-							<span class={`method-tag method-tag--${endpointMethodClass(endpoint.method)}`}
-								>{endpoint.method}</span
-							>
-							<span class="endpoint-path">{endpoint.path}</span>
-						</div>
-						<h3 class="endpoint-name">{endpoint.summary}</h3>
-						<p class="endpoint-desc">{endpoint.detail}</p>
-						{#if endpoint.scope}
-							<div class="endpoint-scope">{endpoint.scope}</div>
-						{/if}
-					</article>
-				{/each}
-			</div>
-		</section>
+		<SectionPanel
+			title="Endpoint summaries"
+			subtitle="Expose the backend surface with one compact card per route."
+		>
+			{#snippet children()}
+				<div class="endpoint-list">
+					{#each capability.endpoints as endpoint}
+						<article class="endpoint-item">
+							<div class="endpoint-item__top">
+								<span class={`method-tag method-tag--${endpointMethodClass(endpoint.method)}`}
+									>{endpoint.method}</span
+								>
+								<span class="endpoint-path">{endpoint.path}</span>
+							</div>
+							<h3 class="endpoint-name">{endpoint.summary}</h3>
+							<p class="endpoint-desc">{endpoint.detail}</p>
+							{#if endpoint.scope}
+								<div class="endpoint-scope">{endpoint.scope}</div>
+							{/if}
+						</article>
+					{/each}
+				</div>
+			{/snippet}
+		</SectionPanel>
 	</div>
 
-	{#if capability.samples?.length}
-		<section class="sample-panel">
-			<div class="panel-title">Reference payloads</div>
-			<div class="sample-list">
-				{#each capability.samples as sample}
-					<article class="sample-item">
-						<div class="sample-item__header">
-							<h3>{sample.title}</h3>
-							<span class="sample-language">{sample.language}</span>
-						</div>
-						<pre class="sample-code"><code>{sample.code}</code></pre>
-					</article>
-				{/each}
-			</div>
-		</section>
-	{/if}
-
-	{#if capability.id === 'platform' && liveMetrics.length}
-		<section class="sample-panel">
-			<div class="panel-title">Live response</div>
-			<div class="sample-list">
-				<article class="sample-item">
-					<div class="sample-item__header">
-						<h3>Runtime platform metadata</h3>
-						<span class="sample-language">json</span>
-					</div>
-					<pre class="sample-code"><code
-							>{JSON.stringify({
-								service: liveMetrics.find((metric) => metric.label === 'Service')?.value ?? '',
-								embeddingModel: liveMetrics.find((metric) => metric.label === 'Embedding model')?.value ?? '',
-								llmModel: liveMetrics.find((metric) => metric.label === 'LLM model')?.value ?? ''
-							}, null, 2)}</code
-						></pre>
-				</article>
-			</div>
-		</section>
+	{#if referenceSamples.length}
+		<SectionPanel
+			title="Reference payloads"
+			subtitle="Keep example payloads and runtime metadata available without crowding the first screen."
+			collapsible={true}
+			defaultOpen={false}
+		>
+			{#snippet children()}
+				<div class="sample-list">
+					{#each referenceSamples as sample}
+						<article class="sample-item">
+							<div class="sample-item__header">
+								<h3>{sample.title}</h3>
+								<span class="sample-language">{sample.language}</span>
+							</div>
+							<pre class="sample-code"><code>{sample.code}</code></pre>
+						</article>
+					{/each}
+				</div>
+			{/snippet}
+		</SectionPanel>
 	{/if}
 </section>
 
 <style>
-	h1,
-	h2,
 	h3,
 	p {
 		margin: 0;
@@ -204,175 +274,13 @@
 		background-color: var(--bg) !important;
 	}
 
-	.page-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		gap: 1.5rem;
-		padding: 1.5rem 1.75rem 1.25rem;
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
-		background-color: var(--bg) !important;
-	}
-
-	.page-header__copy {
-		display: grid;
-		gap: 0.4rem;
-	}
-
-	.page-tag {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--text-faint);
-	}
-
-	.page-title {
-		font-size: 1.3rem;
-		font-weight: 500;
-		letter-spacing: -0.01em;
-		color: var(--text);
-	}
-
-	.page-desc {
-		max-width: 56ch;
-		font-size: 0.93rem;
-		line-height: 1.5;
-		color: var(--text-muted);
-	}
-
-	.status-pill {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: 0.28rem 0.7rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
-		font-size: 0.78rem;
-		font-family: var(--font-mono);
-	}
-
-	.status-pill__dot {
-		width: 5px;
-		height: 5px;
-		border-radius: 50%;
-		background: currentColor;
-	}
-
-	.status-pill--success {
-		border-color: var(--success-border);
-		background: var(--success-soft);
-		color: var(--success);
-	}
-
-	.status-pill--warning {
-		border-color: var(--warning-border);
-		background: var(--warning-soft);
-		color: var(--warning);
-	}
-
-	.status-pill--neutral {
-		border-color: var(--danger-border);
-		background: var(--danger-soft);
-		color: var(--danger);
-	}
-
-	.metrics-bar {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
-		background-color: var(--bg) !important;
-	}
-
-	.metric-cell {
-		display: grid;
-		gap: 0.2rem;
-		padding: 1rem 1.25rem;
-		border-right: 1px solid var(--border);
-		background: var(--bg);
-		background-color: var(--bg) !important;
-	}
-
-	.metric-cell:last-child {
-		border-right: 0;
-	}
-
-	.metric-label {
-		font-size: 0.7rem;
-		font-family: var(--font-mono);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--text-faint);
-	}
-
-	.metric-value {
-		font-size: 1rem;
-		font-weight: 500;
-		font-family: var(--font-mono);
-		color: var(--text);
-		word-break: break-word;
-	}
-
-	.metric-value--accent {
-		color: var(--accent);
-	}
-
-	.metric-value--success {
-		color: var(--success);
-	}
-
-	.metric-value--warning {
-		color: var(--warning);
-	}
-
-	.metric-sub {
-		font-size: 0.78rem;
-		font-family: var(--font-mono);
-		color: var(--text-faint);
-	}
-
 	.body-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	.body-panel,
-	.sample-panel {
-		padding: 1.5rem 1.75rem;
-		background: var(--bg);
-		background-color: var(--bg) !important;
-	}
-
-	.body-panel:first-child {
+	.body-grid :global(.section-panel:first-child) {
 		border-right: 1px solid var(--border);
-	}
-
-	.sample-panel {
-		border-top: 1px solid var(--border);
-	}
-
-	.panel-title {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
-		font-size: 0.78rem;
-		font-family: var(--font-mono);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--text-faint);
-	}
-
-	.panel-title::after {
-		content: '';
-		flex: 1;
-		height: 1px;
-		background: var(--border);
 	}
 
 	.workflow-list,
@@ -427,6 +335,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
+		min-height: 2rem;
 		padding: 0.2rem 0.5rem;
 		border-radius: var(--radius-sm);
 		font-size: 0.72rem;
@@ -468,7 +377,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 38px;
+		min-width: 44px;
+		min-height: 2rem;
 		padding: 0.16rem 0.45rem;
 		border-radius: var(--radius-sm);
 		font-family: var(--font-mono);
@@ -518,6 +428,7 @@
 	.endpoint-scope,
 	.sample-language {
 		display: inline-flex;
+		align-items: center;
 		width: fit-content;
 		padding: 0.18rem 0.42rem;
 		border-radius: 3px;
@@ -550,27 +461,21 @@
 			grid-template-columns: 1fr;
 		}
 
-		.body-panel:first-child {
+		.body-grid :global(.section-panel:first-child) {
 			border-right: 0;
 			border-bottom: 1px solid var(--border);
 		}
 	}
 
 	@media (max-width: 720px) {
-		.page-header,
 		.workflow-item__header,
 		.sample-item__header {
 			flex-direction: column;
 			align-items: flex-start;
 		}
 
-		.metric-cell {
-			border-right: 0;
-			border-bottom: 1px solid var(--border);
-		}
-
-		.metrics-bar .metric-cell:last-child {
-			border-bottom: 0;
+		.workflow-item__action :global(.button) {
+			width: 100%;
 		}
 	}
 </style>

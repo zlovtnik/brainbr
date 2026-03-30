@@ -2,7 +2,7 @@ const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
 	testDir: './e2e',
-	testMatch: '*.e2e.{js,ts}',
+	testMatch: /.*\.e2e\.(js|ts)$/,
 	fullyParallel: true,
 	retries: process.env.CI ? 1 : 0,
 	workers: process.env.CI ? 1 : undefined,

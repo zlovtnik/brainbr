@@ -64,6 +64,8 @@
 	<title>BrainBR Control Plane</title>
 </svelte:head>
 
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
 <div class="page-shell shell">
 	<header class="shell__topbar">
 		<div class="shell__topbar-left">
@@ -125,40 +127,12 @@
 					</a>
 				{/each}
 			</nav>
-
-			<section class="shell__session-card" aria-label="Session state">
-				<h2>Session</h2>
-				<dl>
-					<div>
-						<dt>user</dt>
-						<dd>{data.session?.user ?? 'Guest'}</dd>
-					</div>
-					<div>
-						<dt>tenant</dt>
-						<dd>{data.session?.tenantId ?? 'Unavailable'}</dd>
-					</div>
-					<div>
-						<dt>scopes</dt>
-						<dd>{data.session?.scopes?.length ?? 0}</dd>
-					</div>
-				</dl>
-
-				<div class="shell__scope-list">
-					{#if data.session?.scopes?.length}
-						{#each data.session.scopes as scope}
-							<span>{scope}</span>
-						{/each}
-					{:else}
-						<p>Protected routes require a valid session with appropriate scopes.</p>
-					{/if}
-				</div>
-			</section>
 		</aside>
 
 		<div class="shell__content">
 			<div aria-live="polite" class="sr-only">
-				{#if data.session}
-					Authenticated as {data.session.user}
+				{#if authenticated}
+					Authenticated as {data.session?.user}
 				{:else}
 					Authentication required
 				{/if}
@@ -178,6 +152,49 @@
 				</div>
 			</footer>
 		</div>
+
+		<section class="shell__session-area">
+			<section class="shell__session-card" aria-label="Session state">
+				<h2>Session</h2>
+				<dl>
+					<div>
+						<dt>user</dt>
+						<dd>{data.session?.user ?? 'Guest'}</dd>
+					</div>
+					<div>
+						<dt>tenant</dt>
+						<dd>{data.session?.tenantId ?? 'Unavailable'}</dd>
+					</div>
+					<div>
+						<dt>scopes</dt>
+						<dd>{data.session?.scopes?.length ?? 0}</dd>
+					</div>
+				</dl>
+
+				<div class="shell__scope-list shell__scope-list--desktop">
+					{#if data.session?.scopes?.length}
+						{#each data.session.scopes as scope}
+							<span>{scope}</span>
+						{/each}
+					{:else}
+						<p>Protected routes require a valid session with appropriate scopes.</p>
+					{/if}
+				</div>
+
+				<details class="shell__scope-details">
+					<summary>View scopes</summary>
+					<div class="shell__scope-list">
+						{#if data.session?.scopes?.length}
+							{#each data.session.scopes as scope}
+								<span>{scope}</span>
+							{/each}
+						{:else}
+							<p>Protected routes require a valid session with appropriate scopes.</p>
+						{/if}
+					</div>
+				</details>
+			</section>
+		</section>
 	</div>
 </div>
 
@@ -274,6 +291,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		min-height: 2.75rem;
 		padding: 0.35rem 0.85rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
@@ -281,6 +299,7 @@
 		color: var(--text-muted);
 		font-size: 0.86rem;
 		cursor: pointer;
+		text-decoration: none;
 	}
 
 	.shell__action-button:hover {
@@ -302,12 +321,17 @@
 	.shell__layout {
 		display: grid;
 		grid-template-columns: 220px minmax(0, 1fr);
+		grid-template-areas:
+			'sidebar content'
+			'session content';
+		grid-template-rows: auto 1fr;
 		min-height: calc(100vh - 52px);
 		background: var(--bg);
 		background-color: var(--bg) !important;
 	}
 
 	.shell__sidebar {
+		grid-area: sidebar;
 		display: flex;
 		flex-direction: column;
 		padding: 1rem 0;
@@ -339,6 +363,7 @@
 		padding: 0.5rem 1rem;
 		border-left: 2px solid transparent;
 		color: var(--text-muted);
+		text-decoration: none;
 	}
 
 	.cap-nav__link:hover {
@@ -416,6 +441,13 @@
 		border: 1px solid var(--border);
 	}
 
+	.shell__session-area {
+		grid-area: session;
+		padding-bottom: 1rem;
+		background: var(--bg-1);
+		border-right: 1px solid var(--border);
+	}
+
 	.shell__session-card h2 {
 		margin: 0;
 		font-size: 0.72rem;
@@ -467,6 +499,10 @@
 		gap: 0.45rem;
 	}
 
+	.shell__scope-list--desktop {
+		display: flex;
+	}
+
 	.shell__scope-list span {
 		display: inline-flex;
 		align-items: center;
@@ -487,7 +523,19 @@
 		line-height: 1.5;
 	}
 
+	.shell__scope-details {
+		display: none;
+	}
+
+	.shell__scope-details summary {
+		cursor: pointer;
+		font-size: 0.78rem;
+		font-family: var(--font-mono);
+		color: var(--text-muted);
+	}
+
 	.shell__content {
+		grid-area: content;
 		display: grid;
 		grid-template-rows: 1fr auto;
 		min-width: 0;
@@ -527,14 +575,69 @@
 		gap: 1rem;
 	}
 
-	@media (max-width: 1080px) {
+	@media (max-width: 1024px) {
 		.shell__layout {
 			grid-template-columns: 1fr;
+			grid-template-areas:
+				'sidebar'
+				'content'
+				'session';
+			grid-template-rows: auto 1fr auto;
 		}
 
 		.shell__sidebar {
 			border-right: 0;
 			border-bottom: 1px solid var(--border);
+		}
+
+		.shell__sidebar-label {
+			padding-bottom: 0.6rem;
+		}
+
+		.cap-nav {
+			flex-direction: row;
+			gap: 0.5rem;
+			padding: 0 1rem;
+			overflow-x: auto;
+			scrollbar-width: thin;
+		}
+
+		.cap-nav__link {
+			flex: 0 0 auto;
+			min-width: max-content;
+			padding: 0.65rem 0.9rem;
+			border-left: 0;
+			border: 1px solid var(--border);
+			border-radius: var(--radius-sm);
+			background: var(--bg-2);
+		}
+
+		.cap-nav__link--active {
+			border-color: var(--accent-border);
+		}
+
+		.cap-nav__title-row {
+			width: auto;
+		}
+
+		.shell__session-area {
+			padding: 0 0 1rem;
+			background: var(--bg);
+			border-right: 0;
+			border-top: 1px solid var(--border);
+		}
+
+		.shell__session-card {
+			margin: 1rem 1.75rem 0;
+		}
+
+		.shell__scope-list--desktop {
+			display: none;
+		}
+
+		.shell__scope-details {
+			display: grid;
+			gap: 0.75rem;
 		}
 	}
 
@@ -550,23 +653,9 @@
 			padding: 0.9rem 1rem;
 		}
 
-		.cap-nav {
-			display: flex;
-			flex-direction: column;
-		}
-
 		.cap-nav__title-row {
 			display: flex;
 			width: 100%;
-		}
-
-		.shell__session-card dl div {
-			flex-direction: column;
-			align-items: flex-start;
-		}
-
-		.shell__session-card dd {
-			text-align: left;
 		}
 
 		.shell__footer {
@@ -577,6 +666,19 @@
 		.shell__footer-right {
 			flex-direction: column;
 			align-items: flex-start;
+		}
+
+		.shell__session-card {
+			margin-inline: 1rem;
+		}
+
+		.shell__session-card dl div {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		.shell__session-card dd {
+			text-align: left;
 		}
 	}
 </style>

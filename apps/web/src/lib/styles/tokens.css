@@ -57,6 +57,7 @@
 	--color-error-border: var(--danger-border);
 	--color-warning: var(--warning);
 	--color-warning-soft: var(--warning-soft);
+	--color-warning-border: var(--warning-border);
 	--color-success: var(--success);
 	--color-success-soft: var(--success-soft);
 	--color-success-border: var(--success-border);

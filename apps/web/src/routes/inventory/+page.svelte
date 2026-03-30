@@ -1,48 +1,42 @@
 <script lang="ts">
 	import { navigating } from '$app/state';
-	import { getCapability } from '$lib/capabilities';
-	import Button from '$lib/components/Button.svelte';
-	import Select from '$lib/components/Select.svelte';
+	import SectionPanel from '$lib/components/SectionPanel.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import StatStrip from '$lib/components/StatStrip.svelte';
+	import WorkspaceHeader from '$lib/components/WorkspaceHeader.svelte';
+	import { getCapability } from '$lib/capabilities';
+	import Select from '$lib/components/Select.svelte';
 	import InventoryTable from '$lib/features/inventory/InventoryTable.svelte';
 	import type { PageProps } from './$types';
+
+	type InventoryStatTone = 'accent' | 'success' | 'warning' | 'default';
 
 	let { data }: PageProps = $props();
 	const capability = getCapability('inventory');
 
 	let isLoading = $derived(Boolean(navigating.to));
-	let metricItems = $derived([
+	let statItems = $derived<
+		{ label: string; value: string; detail: string; tone: InventoryStatTone }[]
+	>([
 		{
-			label: 'Auth',
-			value: 'Scoped',
+			label: 'Access',
+			value: data.loadError ? 'Blocked' : 'Scoped',
 			detail: data.loadError
 				? 'Current session is missing the required inventory scopes.'
-				: 'Session-gated inventory surface.'
+				: 'Session-gated inventory surface is available.',
+			tone: data.loadError ? 'warning' : 'success'
 		},
 		{
-			label: 'Visible',
+			label: 'Visible results',
 			value: String(data.inventory?.items.length ?? 0),
-			detail: 'Rows currently rendered on this page.'
+			detail: `${data.inventory?.totalCount ?? 0} total matches for the current filters.`,
+			tone: 'accent'
 		},
 		{
-			label: 'Total matches',
-			value: String(data.inventory?.totalCount ?? 0),
-			detail: 'All records matching the current filters.'
-		},
-		{
-			label: 'Page',
-			value: String(data.filters.page),
-			detail: `Limit ${data.filters.limit} per request.`
-		},
-		{
-			label: 'Sort',
-			value: `${data.filters.sortBy}:${data.filters.sortOrder}`,
-			detail: 'Server-side ordering applied by the Spring API.'
-		},
-		{
-			label: 'Status',
-			value: data.loadError ? 'Blocked' : 'Live',
-			detail: data.loadError ?? 'Inventory route is connected to the backend list endpoint.'
+			label: 'Current view',
+			value: `P${data.filters.page} · ${data.filters.sortBy}:${data.filters.sortOrder}`,
+			detail: `Limit ${data.filters.limit} per request.`,
+			tone: 'default'
 		}
 	]);
 
@@ -73,48 +67,31 @@
 </svelte:head>
 
 <section class="inventory-page">
-	<div class="page-header">
-		<div class="page-header__copy">
-			<div class="page-tag">
-				<span>GET</span>
-				<span>/api/v1/inventory/sku</span>
-			</div>
-			<h1 class="page-title">{capability.navLabel}</h1>
-			<p class="page-desc">
-				Search the tenant catalog, inspect tax payloads, and move directly into edits through the
-				server-rendered inventory boundary.
-			</p>
-		</div>
-		<div class={`status-pill ${data.loadError ? 'status-pill--warning' : 'status-pill--success'}`}>
-			<div class="status-pill__dot"></div>
-			{data.loadError ? 'Scope or API issue' : 'Protected surface'}
-		</div>
-	</div>
+	<WorkspaceHeader
+		tag={['GET', '/api/v1/inventory/sku']}
+		title={capability.navLabel}
+		description="Search the tenant catalog, inspect tax payloads, and move directly into edits through the server-rendered inventory boundary."
+		statusLabel={data.loadError ? 'Scope or API issue' : 'Server-rendered inventory'}
+		statusTone={data.loadError ? 'warning' : 'success'}
+		primaryAction={{ href: '/inventory/new', label: 'Create SKU' }}
+	/>
 
-	<div class="metrics-bar">
-		{#each metricItems as metric}
-			<div class="metric-cell">
-				<p class="metric-label">{metric.label}</p>
-				<h2
-					class={`metric-value ${metric.value === 'Live' ? 'metric-value--success' : metric.value === 'Blocked' ? 'metric-value--warning' : ''}`}
-				>
-					{metric.value}
-				</h2>
-				<p class="metric-sub">{metric.detail}</p>
-			</div>
-		{/each}
-	</div>
+	<StatStrip items={statItems} />
 
-	<div class="body-grid">
-		<section class="body-panel">
-			<div class="panel-title">
-				<span>Filters</span>
+	<div class="inventory-stack">
+		<SectionPanel
+			title="Filters"
+			subtitle="Keep search first, then tune sorting and visibility before reloading the result set."
+		>
+			{#snippet meta()}
 				{#if isLoading}
 					<Spinner label="Refreshing inventory" />
 				{/if}
-			</div>
+			{/snippet}
 
+			{#snippet children()}
 			<form aria-describedby="inventory-filter-help" class="filters" method="GET" role="search">
+				<input type="hidden" name="limit" value={data.filters.limit} />
 				<label class="filters__search" for="query">
 					<span>Search</span>
 					<input
@@ -126,89 +103,87 @@
 					/>
 				</label>
 
-				<Select
-					id="sortBy"
-					label="Sort field"
-					name="sortBy"
-					options={[
-						{ value: 'updated_at', label: 'Updated time' },
-						{ value: 'sku_id', label: 'SKU ID' }
-					]}
-					value={data.filters.sortBy}
-				/>
-
-				<Select
-					id="sortOrder"
-					label="Sort direction"
-					name="sortOrder"
-					options={[
-						{ value: 'desc', label: 'Newest first' },
-						{ value: 'asc', label: 'Oldest / A-Z first' }
-					]}
-					value={data.filters.sortOrder}
-				/>
-
-				<label class="filters__toggle">
-					<input
-						checked={data.filters.includeInactive}
-						name="includeInactive"
-						type="checkbox"
-						value="true"
+				<div class="filters__secondary">
+					<Select
+						id="sortBy"
+						label="Sort field"
+						name="sortBy"
+						options={[
+							{ value: 'updated_at', label: 'Updated time' },
+							{ value: 'sku_id', label: 'SKU ID' }
+						]}
+						value={data.filters.sortBy}
 					/>
-					<span>Include inactive SKUs</span>
-				</label>
+
+					<Select
+						id="sortOrder"
+						label="Sort direction"
+						name="sortOrder"
+						options={[
+							{ value: 'desc', label: 'Newest first' },
+							{ value: 'asc', label: 'Oldest / A-Z first' }
+						]}
+						value={data.filters.sortOrder}
+					/>
+
+					<label class="filters__toggle">
+						<input
+							checked={data.filters.includeInactive}
+							name="includeInactive"
+							type="checkbox"
+							value="true"
+						/>
+						<span>Include inactive SKUs</span>
+					</label>
+				</div>
 
 				<div class="filters__actions">
-					<Button type="submit">
-						{#snippet children()}Apply filters{/snippet}
-					</Button>
-					<a class="text-link" href="/inventory/new">Create SKU</a>
+					<button class="text-link text-link--primary" type="submit">Apply filters</button>
 				</div>
 
 				<p class="sr-only" id="inventory-filter-help">
 					Search by SKU, description, or NCM code, then apply filters to reload the current page.
 				</p>
 			</form>
-		</section>
+			{/snippet}
+		</SectionPanel>
 
-		<section class="body-panel">
-			<div class="panel-title">Results</div>
+		<SectionPanel
+			title="Results"
+			subtitle="Keep the current page of inventory visible immediately after filter changes."
+		>
+			{#snippet children()}
+				<InventoryTable
+					inventory={data.inventory}
+					loadError={data.loadError ?? undefined}
+					successMessage={data.successMessage ?? undefined}
+				/>
 
-			<InventoryTable
-				inventory={data.inventory}
-				loadError={data.loadError ?? undefined}
-				successMessage={data.successMessage ?? undefined}
-			/>
-
-			{#if data.inventory}
-				<nav aria-label="Pagination" class="pager">
-					{#if data.filters.page > 1}
-						<a class="text-link" href={buildPageHref(data.filters.page - 1)}>Previous page</a>
-					{:else}
-						<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1"
-							>Previous page</span
-						>
-					{/if}
-					<span>Page {data.filters.page}</span>
-					{#if data.inventory.hasMore}
-						<a class="text-link" href={buildPageHref(data.filters.page + 1)}>Next page</a>
-					{:else}
-						<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1"
-							>Next page</span
-						>
-					{/if}
-				</nav>
-			{/if}
-		</section>
+				{#if data.inventory}
+					<nav aria-label="Pagination" class="pager">
+						{#if data.filters.page > 1}
+							<a class="text-link" href={buildPageHref(data.filters.page - 1)}>Previous page</a>
+						{:else}
+							<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1"
+								>Previous page</span
+							>
+						{/if}
+						<span class="pager__current">Page {data.filters.page}</span>
+						{#if data.inventory.hasMore}
+							<a class="text-link" href={buildPageHref(data.filters.page + 1)}>Next page</a>
+						{:else}
+							<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1"
+								>Next page</span
+							>
+						{/if}
+					</nav>
+				{/if}
+			{/snippet}
+		</SectionPanel>
 	</div>
 </section>
 
 <style>
-	h1,
-	h2 {
-		margin: 0;
-	}
-
 	.inventory-page {
 		display: grid;
 		min-width: 0;
@@ -216,173 +191,29 @@
 		background-color: var(--bg) !important;
 	}
 
-	.page-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		gap: 1.5rem;
-		padding: 1.5rem 1.75rem 1.25rem;
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
-	}
-
-	.page-header__copy {
+	.inventory-stack {
 		display: grid;
-		gap: 0.4rem;
 	}
 
-	.page-tag {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-		letter-spacing: 0.1em;
-		text-transform: uppercase;
-		color: var(--text-faint);
-	}
-
-	.page-title {
-		font-size: 1.3rem;
-		font-weight: 500;
-		letter-spacing: -0.01em;
-		color: var(--text);
-	}
-
-	.page-desc {
-		max-width: 56ch;
-		font-size: 0.93rem;
-		line-height: 1.5;
-		color: var(--text-muted);
-	}
-
-	.status-pill {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: 0.28rem 0.7rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
-		font-size: 0.78rem;
-		font-family: var(--font-mono);
-	}
-
-	.status-pill__dot {
-		width: 5px;
-		height: 5px;
-		border-radius: 50%;
-		background: currentColor;
-	}
-
-	.status-pill--success {
-		border-color: var(--success-border);
-		background: var(--success-soft);
-		color: var(--success);
-	}
-
-	.status-pill--warning {
-		border-color: var(--warning-border);
-		background: var(--warning-soft);
-		color: var(--warning);
-	}
-
-	.metrics-bar {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
-	}
-
-	.metric-cell {
-		display: grid;
-		gap: 0.2rem;
-		padding: 1rem 1.25rem;
-		border-right: 1px solid var(--border);
-		background: var(--bg);
-	}
-
-	.metric-cell:last-child {
-		border-right: 0;
-	}
-
-	.metric-label {
-		font-size: 0.7rem;
-		font-family: var(--font-mono);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--text-faint);
-	}
-
-	.metric-value {
-		font-size: 1rem;
-		font-weight: 500;
-		font-family: var(--font-mono);
-		color: var(--text);
-		word-break: break-word;
-	}
-
-	.metric-value--success {
-		color: var(--success);
-	}
-
-	.metric-value--warning {
-		color: var(--warning);
-	}
-
-	.metric-sub {
-		font-size: 0.78rem;
-		font-family: var(--font-mono);
-		color: var(--text-faint);
-	}
-
-	.body-grid {
-		display: grid;
-		grid-template-columns: minmax(300px, 0.95fr) minmax(0, 1.45fr);
-	}
-
-	.body-panel {
-		padding: 1.5rem 1.75rem;
-		background: var(--bg);
-	}
-
-	.body-panel:first-child {
-		border-right: 1px solid var(--border);
-	}
-
-	.panel-title {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
-		font-size: 0.78rem;
-		font-family: var(--font-mono);
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: var(--text-faint);
-	}
-
-	.panel-title::after {
-		content: '';
-		flex: 1;
-		height: 1px;
-		background: var(--border);
+	.inventory-stack :global(.section-panel + .section-panel) {
+		border-top: 1px solid var(--border);
 	}
 
 	.filters {
 		display: grid;
-		grid-template-columns: 1fr;
 		gap: var(--space-4);
-		padding: 1rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		background: var(--bg-2);
-		background-color: var(--bg-2) !important;
 	}
 
 	.filters__search,
 	.filters__toggle {
 		display: grid;
 		gap: var(--space-2);
+	}
+
+	.filters__search span,
+	.filters__toggle span {
+		font-weight: 500;
+		color: var(--text);
 	}
 
 	.filters__search input {
@@ -400,18 +231,31 @@
 		color: var(--text-faint);
 	}
 
+	.filters__secondary {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: var(--space-4);
+	}
+
+	.filters :global(.field) {
+		padding: 0.85rem 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-3);
+		background-color: var(--bg-3) !important;
+	}
+
 	.filters__toggle {
 		grid-auto-flow: column;
 		grid-template-columns: auto 1fr;
 		align-items: center;
-		align-self: center;
+		align-self: end;
 		min-height: 3.2rem;
 		padding: 0.9rem 1rem;
 		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
 		background: var(--bg-3);
 		background-color: var(--bg-3) !important;
-		font-weight: 500;
 	}
 
 	.filters__toggle input {
@@ -426,19 +270,11 @@
 		gap: var(--space-3);
 	}
 
-	.filters :global(.field) {
-		padding: 0.85rem 0.9rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
-		background: var(--bg-3);
-		background-color: var(--bg-3) !important;
-	}
-
 	.text-link {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		min-height: 2rem;
+		min-height: 2.75rem;
 		padding: 0.38rem 0.85rem;
 		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
@@ -463,6 +299,10 @@
 		outline-offset: 2px;
 	}
 
+	.text-link--primary {
+		cursor: pointer;
+	}
+
 	.text-link--disabled {
 		color: var(--text-faint);
 		cursor: not-allowed;
@@ -471,35 +311,39 @@
 	}
 
 	.pager {
-		display: flex;
-		justify-content: space-between;
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, auto));
 		align-items: center;
+		justify-content: space-between;
 		gap: var(--space-4);
-		color: var(--text-muted);
 		margin-top: 1rem;
+		color: var(--text-muted);
+	}
+
+	.pager__current {
+		justify-self: center;
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+		color: var(--text-faint);
 	}
 
 	@media (max-width: 860px) {
-		.body-grid {
+		.filters__secondary {
 			grid-template-columns: 1fr;
-		}
-
-		.body-panel:first-child {
-			border-right: 0;
-			border-bottom: 1px solid var(--border);
 		}
 	}
 
 	@media (max-width: 720px) {
-		.page-header,
-		.panel-title {
-			flex-direction: column;
-			align-items: flex-start;
+		.filters__actions .text-link {
+			width: 100%;
 		}
 
 		.pager {
-			flex-direction: column;
-			align-items: stretch;
+			grid-template-columns: 1fr;
+		}
+
+		.pager__current {
+			justify-self: start;
 		}
 	}
 </style>

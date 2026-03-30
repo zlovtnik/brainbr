@@ -27,7 +27,13 @@
 
 :global(a) {
 	color: inherit;
-	text-decoration: none;
+	text-decoration-thickness: 0.08em;
+	text-underline-offset: 0.14em;
+}
+
+:global(a:hover),
+:global(a:focus-visible) {
+	text-decoration: underline;
 }
 
 :global(button),
@@ -120,7 +126,21 @@
 }
 
 :global(.skip-link) {
-	display: none !important;
+	position: absolute;
+	top: var(--space-3);
+	left: var(--space-4);
+	padding: var(--space-2) var(--space-4);
+	border-radius: var(--radius-sm);
+	background: var(--bg-2);
+	color: var(--text);
+	border: 1px solid var(--border-strong);
+	z-index: 999;
+	transform: translateY(-200%);
+}
+
+:global(.skip-link:focus),
+:global(.skip-link:active) {
+	transform: translateY(0);
 }
 
 :global(#rss-app) {
