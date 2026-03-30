@@ -2,9 +2,20 @@ openapi: 3.1.0
 info:
   title: FiscalBrain BR API
   version: 0.1.0
+  description: API for managing fiscal transition calculations and inventory tax impacts in Brazil
 servers:
   - url: https://api.fiscalbrain.local/api/v1
 paths:
+  /platform/info:
+    get:
+      summary: Return public runtime platform metadata
+      responses:
+        '200':
+          description: Platform metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformInfoResponse'
   /transition/calendar:
     get:
       summary: List transition calendar weights
@@ -96,6 +107,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/RiskResponse'
   /inventory/sku:
+    post:
+      summary: Create or upsert a tenant-scoped SKU
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryWriteRequest'
+      responses:
+        '200':
+          description: Upsert result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryWriteResultResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     get:
       summary: List inventory SKUs
       parameters:
@@ -149,8 +177,199 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InventorySkuResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update an existing tenant-scoped SKU
+      parameters:
+        - in: path
+          name: sku_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryUpdateRequest'
+      responses:
+        '200':
+          description: Update result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryWriteResultResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Soft delete a tenant-scoped SKU
+      parameters:
+        - in: path
+          name: sku_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Delete result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryDeleteResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /inventory/sku/{sku_id}/re-audit:
+    post:
+      summary: Queue a re-audit for a tenant-scoped SKU
+      parameters:
+        - in: path
+          name: sku_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Re-audit queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReAuditResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /audit/explain/{sku_id}:
+    get:
+      summary: Return explainability details for a SKU
+      parameters:
+        - in: path
+          name: sku_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Explainability response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExplainResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /audit/explain/{sku_id}/artifact/latest:
+    get:
+      summary: Return the latest explainability artifact for a SKU
+      parameters:
+        - in: path
+          name: sku_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latest explainability artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExplainabilityArtifactResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /audit/explain/artifact/runs/{run_id}:
+    get:
+      summary: Return a stored explainability artifact by run id
+      parameters:
+        - in: path
+          name: run_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Explainability artifact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExplainabilityArtifactResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /audit/query:
+    post:
+      summary: Query the legal corpus using semantic audit retrieval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditQueryRequest'
+      responses:
+        '200':
+          description: Query response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditQueryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /ingestion/jobs:
+    post:
+      summary: Queue a legal-ingestion job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestionEnqueueRequest'
+      responses:
+        '202':
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionEnqueueResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /split-payment/events:
+    post:
+      summary: Create a split-payment event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SplitPaymentCreateRequest'
+      responses:
+        '200':
+          description: Event creation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitPaymentCreateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      summary: List split-payment events
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: sku_id
+          schema:
+            type: string
+        - in: query
+          name: event_type
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Split-payment page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SplitPaymentListResponse'
 
 components:
   parameters:
@@ -183,6 +402,18 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
 
   schemas:
     ErrorResponse:
@@ -193,6 +424,15 @@ components:
         message:
           type: string
         request_id:
+          type: string
+    PlatformInfoResponse:
+      type: object
+      properties:
+        service:
+          type: string
+        embeddingModel:
+          type: string
+        llmModel:
           type: string
     TransitionCalendarResponse:
       type: object
@@ -295,7 +535,7 @@ components:
         transition_risk_score:
           type: integer
           nullable: true
-        last_updated:
+        updated_at:
           type: string
           format: date-time
         metadata:
@@ -327,6 +567,40 @@ components:
         updated_at:
           type: string
           format: date-time
+    InventoryWriteRequest:
+      type: object
+      required: [sku_id, description, ncm_code, origin_state, destination_state]
+      properties:
+        sku_id:
+          type: string
+        description:
+          type: string
+        ncm_code:
+          type: string
+        origin_state:
+          type: string
+        destination_state:
+          type: string
+        legacy_taxes:
+          type: object
+          additionalProperties:
+            type: number
+    InventoryUpdateRequest:
+      type: object
+      required: [description, ncm_code, origin_state, destination_state]
+      properties:
+        description:
+          type: string
+        ncm_code:
+          type: string
+        origin_state:
+          type: string
+        destination_state:
+          type: string
+        legacy_taxes:
+          type: object
+          additionalProperties:
+            type: number
     InventoryListResponse:
       type: object
       properties:
@@ -334,6 +608,244 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/InventorySkuResponse'
+        total_count:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        limit:
+          type: integer
+        has_more:
+          type: boolean
+    InventoryWriteResultResponse:
+      type: object
+      properties:
+        sku_id:
+          type: string
+        status:
+          type: string
+    InventoryDeleteResponse:
+      type: object
+      properties:
+        sku_id:
+          type: string
+        status:
+          type: string
+    ReAuditResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+    AuditExplainSource:
+      type: object
+      properties:
+        law_ref:
+          type: string
+        content:
+          type: string
+        source_url:
+          type: string
+    AuditExplainResponse:
+      type: object
+      properties:
+        sku_id:
+          type: string
+        reform_taxes:
+          type: object
+          additionalProperties: true
+        audit_confidence:
+          type: number
+          format: double
+        llm_model_used:
+          type: string
+        source:
+          $ref: '#/components/schemas/AuditExplainSource'
+    AuditQueryRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+        filters:
+          $ref: '#/components/schemas/AuditQueryFilters'
+    AuditQueryFilters:
+      type: object
+      properties:
+        law_type:
+          type: string
+        published_after:
+          type: string
+    AuditQueryResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditQueryResult'
+    AuditQueryResult:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        score:
+          type: number
+          format: double
+    AuditExplainabilityArtifactResponse:
+      type: object
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        sku_id:
+          type: string
+        job_id:
+          type: string
+        request_id:
+          type: string
+          nullable: true
+        artifact_version:
+          type: string
+        schema_version:
+          type: string
+        artifact_digest:
+          type: string
+        llm_model_used:
+          type: string
+        vector_id:
+          type: string
+        audit_confidence:
+          type: number
+          format: double
+        source:
+          $ref: '#/components/schemas/AuditExplainSource'
+        replay_context:
+          type: object
+          additionalProperties: true
+        rag_output:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    IngestionEnqueueRequest:
+      type: object
+      required: [law_ref, law_type]
+      properties:
+        law_ref:
+          type: string
+        law_type:
+          type: string
+        source_url:
+          type: string
+        raw_content:
+          type: string
+        published_at:
+          type: string
+          format: date
+        effective_at:
+          type: string
+          format: date
+        tags:
+          type: array
+          items:
+            type: string
+    IngestionEnqueueResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+        status:
+          type: string
+    SplitPaymentCreateRequest:
+      type: object
+      required: [sku_id, event_type, amount, currency, idempotency_key, timestamp]
+      properties:
+        sku_id:
+          type: string
+        event_type:
+          type: string
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+        currency:
+          type: string
+        idempotency_key:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        integration_metadata:
+          type: object
+          additionalProperties: true
+        event_payload:
+          type: object
+          additionalProperties: true
+    SplitPaymentCreateResponse:
+      type: object
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        integration_status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    SplitPaymentEventResponse:
+      type: object
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        sku_id:
+          type: string
+        event_type:
+          type: string
+        amount:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        idempotency_key:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        integration_status:
+          type: string
+        integration_metadata:
+          type: object
+          additionalProperties: true
+        event_payload:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    SplitPaymentListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SplitPaymentEventResponse'
         total_count:
           type: integer
           format: int64

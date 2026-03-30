@@ -25,7 +25,7 @@ class AuditQueueWorkerRoute(
             .handled(true)
             .process { exchange ->
                 val ex = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable::class.java)
-                logger.error("Audit queue route failure: ${ex?.message}", ex)
+                logger.error("Worker route failure route_id=audit-queue-worker", ex)
             }
 
         from("timer:auditQueuePoller?period={{app.worker.audit-poll-interval-ms:2000}}")

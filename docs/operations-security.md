@@ -11,6 +11,7 @@
 - Structured logs with `request_id`, `company_id`, and job IDs.
 - Metrics: API latency, queue depth, worker failures, embedding/LLM errors.
 - Alerting: failed ingestion runs, repeated RAG parse failures, MV refresh failures.
+- Operational procedures: see [Runbooks and SLOs](runbooks-and-slos.md).
 
 ## Security controls
 

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
@@ -46,7 +47,9 @@ class QueueWorkerService(
 
             val attempt = extractAttempt(payload)
             val job = runCatching { toIngestionJob(payload, attempt) }.getOrElse {
-                logger.error("Invalid ingestion payload identifiers={}", summarizePayload(payload), it)
+                withPayloadContext(payload) {
+                    logger.error("Invalid ingestion payload identifiers={}", summarizePayload(payload), it)
+                }
                 publishMalformedRecordToDeadLetterQueue(
                     client = client,
                     dlqStream = client.ingestionDlqName,
@@ -58,28 +61,30 @@ class QueueWorkerService(
                 return@forEach
             }
 
-            runCatching {
-                ingestionService.process(job)
-                logger.info(
-                    "Ingestion job processed job_id={} company_id={} request_id={} queue={} attempt={}",
-                    job.jobId,
-                    job.companyId,
-                    job.requestId ?: "",
-                    stream,
-                    attempt
-                )
-                client.acknowledge(stream, group, record.id.value)
-            }.onFailure { ex ->
-                handleFailure(
-                    client = client,
-                    stream = stream,
-                    group = group,
-                    dlqStream = client.ingestionDlqName,
-                    recordId = record.id.value,
-                    payload = payload,
-                    attempt = attempt,
-                    ex = ex
-                )
+            withLogContext(job.jobId, job.companyId.toString(), job.requestId) {
+                runCatching {
+                    ingestionService.process(job)
+                    logger.info(
+                        "Ingestion job processed queue={} attempt={} job_id={} company_id={} request_id={}",
+                        stream,
+                        attempt,
+                        job.jobId,
+                        job.companyId,
+                        job.requestId ?: ""
+                    )
+                    client.acknowledge(stream, group, record.id.value)
+                }.onFailure { ex ->
+                    handleFailure(
+                        client = client,
+                        stream = stream,
+                        group = group,
+                        dlqStream = client.ingestionDlqName,
+                        recordId = record.id.value,
+                        payload = payload,
+                        attempt = attempt,
+                        ex = ex
+                    )
+                }
             }
         }
     }
@@ -100,7 +105,9 @@ class QueueWorkerService(
 
             val attempt = extractAttempt(payload)
             val job = runCatching { toAuditJob(payload, attempt) }.getOrElse {
-                logger.error("Invalid audit payload identifiers={}", summarizePayload(payload), it)
+                withPayloadContext(payload) {
+                    logger.error("Invalid audit payload identifiers={}", summarizePayload(payload), it)
+                }
                 publishMalformedRecordToDeadLetterQueue(
                     client = client,
                     dlqStream = client.auditDlqName,
@@ -112,28 +119,30 @@ class QueueWorkerService(
                 return@forEach
             }
 
-            runCatching {
-                auditService.processAuditJob(job)
-                logger.info(
-                    "Audit job processed job_id={} company_id={} request_id={} queue={} attempt={}",
-                    job.jobId,
-                    job.companyId,
-                    job.requestId ?: "",
-                    stream,
-                    attempt
-                )
-                client.acknowledge(stream, group, record.id.value)
-            }.onFailure { ex ->
-                handleFailure(
-                    client = client,
-                    stream = stream,
-                    group = group,
-                    dlqStream = client.auditDlqName,
-                    recordId = record.id.value,
-                    payload = payload,
-                    attempt = attempt,
-                    ex = ex
-                )
+            withLogContext(job.jobId, job.companyId.toString(), job.requestId) {
+                runCatching {
+                    auditService.processAuditJob(job)
+                    logger.info(
+                        "Audit job processed queue={} attempt={} job_id={} company_id={} request_id={}",
+                        stream,
+                        attempt,
+                        job.jobId,
+                        job.companyId,
+                        job.requestId ?: ""
+                    )
+                    client.acknowledge(stream, group, record.id.value)
+                }.onFailure { ex ->
+                    handleFailure(
+                        client = client,
+                        stream = stream,
+                        group = group,
+                        dlqStream = client.auditDlqName,
+                        recordId = record.id.value,
+                        payload = payload,
+                        attempt = attempt,
+                        ex = ex
+                    )
+                }
             }
         }
     }
@@ -148,11 +157,16 @@ class QueueWorkerService(
         attempt: Int,
         ex: Throwable
     ) {
+        val jobId = identifierFromPayload(payload, "job_id")
+        val companyId = identifierFromPayload(payload, "company_id")
+        val requestId = identifierFromPayload(payload, "request_id")
         logger.error(
-            "Queue processing failed queue={} attempt={} identifiers={}",
+            "Queue processing failed queue={} attempt={} job_id={} company_id={} request_id={}",
             stream,
             attempt,
-            summarizePayload(payload),
+            jobId,
+            companyId,
+            requestId,
             ex
         )
 
@@ -282,5 +296,41 @@ class QueueWorkerService(
     private fun summarizePayload(payload: Map<String, String>): Map<String, String> {
         val keys = setOf("job_id", "company_id", "request_id", "attempt", "event_id", "retry_after")
         return payload.filterKeys { it in keys }
+    }
+
+    private fun withLogContext(jobId: String?, companyId: String?, requestId: String?, block: () -> Unit) {
+        if (!jobId.isNullOrBlank()) {
+            MDC.put("job_id", jobId)
+        }
+        if (!companyId.isNullOrBlank()) {
+            MDC.put("company_id", companyId)
+        }
+        if (!requestId.isNullOrBlank()) {
+            MDC.put("request_id", requestId)
+        }
+        try {
+            block()
+        } finally {
+            MDC.remove("job_id")
+            MDC.remove("company_id")
+            MDC.remove("request_id")
+        }
+    }
+
+    private fun withPayloadContext(payload: Map<String, String>, block: () -> Unit) {
+        withLogContext(
+            jobId = identifierFromPayload(payload, "job_id"),
+            companyId = identifierFromPayload(payload, "company_id"),
+            requestId = identifierFromPayload(payload, "request_id"),
+            block = block
+        )
+    }
+
+    private fun identifierFromPayload(payload: Map<String, String>, key: String): String? {
+        payload[key]?.takeIf { it.isNotBlank() }?.let { return it }
+        val payloadJson = payload["payload"] ?: return null
+        return runCatching {
+            objectMapper.readTree(payloadJson).path(key).asText(null)?.takeIf { it.isNotBlank() }
+        }.getOrNull()
     }
 }
