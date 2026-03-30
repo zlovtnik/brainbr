@@ -7,6 +7,43 @@
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
-		<div style="display: contents">%sveltekit.body%</div>
+		<script>
+			(() => {
+				let observer;
+				let timeoutId;
+
+				const removeInjectedShell = () => {
+					const injectedShell = document.getElementById('rss-app');
+					if (!injectedShell) {
+						return false;
+					}
+
+					injectedShell.remove();
+					observer?.disconnect();
+					if (timeoutId) {
+						clearTimeout(timeoutId);
+					}
+					return true;
+				};
+
+				if (removeInjectedShell()) {
+					return;
+				}
+
+				observer = new MutationObserver(() => {
+					removeInjectedShell();
+				});
+
+				observer.observe(document.documentElement, {
+					childList: true,
+					subtree: true
+				});
+
+				timeoutId = window.setTimeout(() => {
+					observer?.disconnect();
+				}, 5000);
+			})();
+		</script>
+		%sveltekit.body%
 	</body>
 </html>

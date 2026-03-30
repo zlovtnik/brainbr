@@ -40,7 +40,7 @@ export async function bootstrapSession(
 	await page.goto('/auth');
 	await page.getByLabel('Bearer JWT').fill(createToken(payload));
 	await page.getByRole('button', { name: 'Start authenticated session' }).click();
-	await expect(page).toHaveURL(/\/inventory$/);
+	await expect(page).toHaveURL(/\/platform$/);
 }
 
 export async function expectNoAxeViolations(page) {

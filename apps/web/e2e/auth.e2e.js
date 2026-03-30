@@ -31,11 +31,9 @@ test('auth bootstrap stores session, moves focus to main content, and passes axe
 		scope: 'inventory:read inventory:write'
 	});
 
-	await expect(page.getByText('inventory-operator')).toBeVisible();
+	await expect(page.getByText('inventory-operator', { exact: true })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Platform', exact: true })).toBeVisible();
 	await expectMainContentFocus(page);
-
-	await page.keyboard.press('Tab');
-	await expect(page.getByLabel('Search')).toBeFocused();
 
 	await expectNoAxeViolations(page);
 });

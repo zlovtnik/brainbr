@@ -246,8 +246,8 @@
 		gap: var(--space-3);
 		padding: var(--space-4);
 		border-radius: var(--radius-md);
-		border: 1px solid var(--color-error-border);
-		background: rgba(255, 245, 242, 0.95);
+		border: 1px solid var(--danger-border);
+		background: var(--danger-soft);
 	}
 
 	.error-summary h2,
@@ -275,11 +275,11 @@
 		justify-content: center;
 		min-height: 2.75rem;
 		padding: 0.8rem 1.15rem;
-		border-radius: 999px;
-		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--border);
 		text-decoration: none;
-		font-weight: 700;
-		color: var(--color-accent-strong);
-		background: rgba(255, 255, 255, 0.7);
+		font-weight: 500;
+		color: var(--text-muted);
+		background: var(--bg-2);
 	}
 </style>

@@ -5,7 +5,7 @@
 	let { data, form }: PageProps = $props();
 </script>
 
-<form method="POST">
+<form method="POST" novalidate>
 	<InventoryEditor
 		cancelHref="/inventory"
 		description="Create a new SKU entry and send the payload to the tenant-scoped Spring inventory API."

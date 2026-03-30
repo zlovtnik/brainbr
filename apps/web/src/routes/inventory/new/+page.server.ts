@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { ApiClientError, createApiClientFromEvent } from '$lib/server/api/client';
 import { parseInventoryForm } from '$lib/features/inventory/forms';
 import { toInventoryFormValues } from '$lib/features/inventory/types';
-import { requireSession } from '$lib/server/auth';
+import { describeProtectedApiError, requireSession } from '$lib/server/auth';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -30,7 +30,10 @@ export const actions: Actions = {
 				return fail(error.status, {
 					...parsed,
 					success: false,
-					errors: { ...parsed.errors, _form: error.message }
+					errors: {
+						...parsed.errors,
+						_form: describeProtectedApiError(event.locals.session, error, ['inventory:write'])
+					}
 				});
 			}
 			throw error;

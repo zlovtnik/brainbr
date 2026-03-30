@@ -62,31 +62,35 @@
 			{#snippet header()}
 				<h2>Legacy taxes</h2>
 			{/snippet}
-			<dl class="tax-list">
-				{#each Object.entries(data.item.legacyTaxes) as [name, value]}
-					<div>
-						<dt>{name.toUpperCase()}</dt>
-						<dd>{value}</dd>
-					</div>
-				{:else}
-					<p class="lede">No legacy taxes were supplied for this SKU.</p>
-				{/each}
-			</dl>
+			{#if Object.keys(data.item.legacyTaxes).length > 0}
+				<dl class="tax-list">
+					{#each Object.entries(data.item.legacyTaxes) as [name, value]}
+						<div>
+							<dt>{name.toUpperCase()}</dt>
+							<dd>{value}</dd>
+						</div>
+					{/each}
+				</dl>
+			{:else}
+				<p class="lede">No legacy taxes were supplied for this SKU.</p>
+			{/if}
 		</Card>
 		<Card>
 			{#snippet header()}
 				<h2>Reform taxes</h2>
 			{/snippet}
-			<dl class="tax-list">
-				{#each Object.entries(data.item.reformTaxes) as [name, value]}
-					<div>
-						<dt>{name.toUpperCase()}</dt>
-						<dd>{value}</dd>
-					</div>
-				{:else}
-					<p class="lede">No reform tax output is available yet for this SKU.</p>
-				{/each}
-			</dl>
+			{#if Object.keys(data.item.reformTaxes).length > 0}
+				<dl class="tax-list">
+					{#each Object.entries(data.item.reformTaxes) as [name, value]}
+						<div>
+							<dt>{name.toUpperCase()}</dt>
+							<dd>{value}</dd>
+						</div>
+					{/each}
+				</dl>
+			{:else}
+				<p class="lede">No reform tax output is available yet for this SKU.</p>
+			{/if}
 		</Card>
 	</div>
 </section>

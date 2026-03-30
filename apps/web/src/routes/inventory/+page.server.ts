@@ -1,7 +1,7 @@
 import { createApiClientFromEvent, ApiClientError } from '$lib/server/api/client';
 import { parseInventoryFilters } from '$lib/features/inventory/filters';
 import { mapInventoryList } from '$lib/features/inventory/types';
-import { requireSession } from '$lib/server/auth';
+import { describeProtectedApiError, requireSession } from '$lib/server/auth';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -25,7 +25,9 @@ export const load: PageServerLoad = async (event) => {
 		};
 	} catch (error) {
 		const loadError =
-			error instanceof ApiClientError ? error.message : 'A server error prevented inventory loading.';
+			error instanceof ApiClientError
+				? describeProtectedApiError(event.locals.session, error, ['inventory:read'])
+				: 'A server error prevented inventory loading.';
 		return {
 			filters,
 			inventory: null,

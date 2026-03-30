@@ -5,7 +5,7 @@
 	let { data, form }: PageProps = $props();
 </script>
 
-<form method="POST">
+<form method="POST" novalidate>
 	<InventoryEditor
 		cancelHref={`/inventory/${encodeURIComponent(data.item.skuId)}`}
 		description="Update the persisted SKU metadata while keeping bearer auth and request forwarding on the server."

@@ -45,7 +45,7 @@ test('inventory list exposes the empty state accessibly', async ({ page }) => {
 	await page.goto('/inventory?query=no-match');
 
 	await expect(page.getByRole('status')).toContainText('No inventory matched');
-	await expect(page.getByRole('link', { name: 'Create SKU' })).toBeVisible();
+	await expect(page.getByRole('status').getByRole('link', { name: 'Create SKU' })).toBeVisible();
 });
 
 test('inventory list surfaces backend load failures', async ({ page }) => {

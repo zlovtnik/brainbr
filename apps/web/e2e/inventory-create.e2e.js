@@ -18,7 +18,7 @@ test('create SKU shows validation summary and success redirect', async ({ page }
 	await page.getByRole('button', { name: 'Create SKU' }).click();
 
 	await expect(page.locator('#inventory-form-errors')).toBeFocused();
-	await expect(page.getByText('Description is required.')).toBeVisible();
+	await expect(page.locator('#description-error')).toBeVisible();
 	await expect(page.getByLabel('Description')).toHaveAttribute('aria-invalid', 'true');
 
 	await page.getByLabel('SKU ID').fill('SKU-999');

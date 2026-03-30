@@ -72,10 +72,17 @@
 		justify-content: center;
 		min-height: 2.75rem;
 		padding: 0.65rem 0.95rem;
-		border-radius: 999px;
-		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--border);
 		text-decoration: none;
-		font-weight: 700;
-		color: var(--color-accent-strong);
+		font-weight: 500;
+		color: var(--text-muted);
+		background: var(--bg-2);
+	}
+
+	.table-link:hover {
+		background: var(--bg-3);
+		border-color: var(--border-strong);
+		color: var(--text);
 	}
 </style>
