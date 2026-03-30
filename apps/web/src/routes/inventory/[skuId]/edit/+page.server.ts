@@ -3,6 +3,7 @@ import { ApiClientError, createApiClientFromEvent } from '$lib/server/api/client
 import { parseInventoryForm } from '$lib/features/inventory/forms';
 import { mapInventoryRecord, toInventoryFormValues } from '$lib/features/inventory/types';
 import { describeProtectedApiError, requireSession } from '$lib/server/auth';
+import { writeFlash } from '$lib/server/session';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
@@ -56,6 +57,10 @@ export const actions: Actions = {
 			throw cause;
 		}
 
-		throw redirect(303, `/inventory/${encodeURIComponent(event.params.skuId)}?saved=updated`);
+		writeFlash(event.cookies, {
+			type: 'success',
+			message: 'SKU updated successfully.'
+		});
+		throw redirect(303, `/inventory/${encodeURIComponent(event.params.skuId)}`);
 	}
 };

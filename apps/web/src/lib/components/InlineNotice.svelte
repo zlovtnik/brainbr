@@ -32,7 +32,7 @@
 	{role}
 	tabindex={autofocus ? -1 : undefined}
 >
-	<h2>{title}</h2>
+	<p class="notice__title"><strong>{title}</strong></p>
 	<p>{message}</p>
 </section>
 
@@ -45,12 +45,12 @@
 		border: 1px solid transparent;
 	}
 
-	.notice h2,
+	.notice__title,
 	.notice p {
 		margin: 0;
 	}
 
-	.notice h2 {
+	.notice__title {
 		font-size: 0.76rem;
 		font-family: var(--font-mono);
 		letter-spacing: 0.08em;

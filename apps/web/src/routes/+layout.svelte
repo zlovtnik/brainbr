@@ -40,9 +40,10 @@
 		data.session?.user && data.session?.tenantId
 			? `${data.session.user} · ${data.session.tenantId}`
 			: data.session?.user
-				? `${data.session.user} · session`
-				: 'guest · no-session'
+				? data.session.user
+				: 'Guest'
 	);
+	let homeHref = $derived(authenticated ? '/inventory' : '/auth');
 	const capabilityIcons = {
 		platform: '◈',
 		inventory: '◫',
@@ -54,14 +55,8 @@
 </script>
 
 <svelte:head>
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link
-		href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap"
-		rel="stylesheet"
-	/>
 	<link rel="icon" href={favicon} />
-	<title>BrainBR Control Plane</title>
+	<title>BrainBR Fiscal Console</title>
 </svelte:head>
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -69,13 +64,13 @@
 <div class="page-shell shell">
 	<header class="shell__topbar">
 		<div class="shell__topbar-left">
-			<div class="shell__brand">
+			<a aria-label={authenticated ? 'BrainBR, go to inventory' : 'BrainBR, go to sign in'} class="shell__brand" href={homeHref}>
 				<div class="shell__brand-dot"></div>
 				<span>BrainBR</span>
-			</div>
+			</a>
 			<div class="shell__divider"></div>
 			<div class="shell__breadcrumb" aria-label="Breadcrumb">
-				<span>control-plane</span>
+				<span>operations</span>
 				<span>/</span>
 				<span class="shell__breadcrumb-active"
 					>{activeCapability?.navLabel?.toLowerCase() ?? 'auth'}</span
@@ -130,25 +125,21 @@
 		</aside>
 
 		<div class="shell__content">
-			<div aria-live="polite" class="sr-only">
-				{#if authenticated}
-					Authenticated as {data.session?.user}
-				{:else}
-					Authentication required
-				{/if}
-			</div>
-
 			<main bind:this={mainContent} id="main-content" tabindex="-1">
-				{@render children()}
+				<div class="shell__viewport">
+					{@render children()}
+				</div>
 			</main>
 
 			<footer class="shell__footer">
-				<p>Server-rendered SvelteKit · Spring API backend · Tokens server-side only</p>
-				<div class="shell__footer-right">
-					<p>{capabilitySummary.available}/{capabilitySummary.total} available</p>
-					<a class="shell__action-button shell__action-button--ghost" href="/platform"
-						>Open workspace</a
-					>
+				<div class="shell__footer-inner">
+					<p>Tax transition intelligence for Brazilian fiscal operations.</p>
+					<div class="shell__footer-right">
+						<p>{capabilitySummary.available}/{capabilitySummary.total} capabilities live</p>
+						<a class="shell__action-button shell__action-button--ghost" href="/platform"
+							>Open operations</a
+						>
+					</div>
 				</div>
 			</footer>
 		</div>
@@ -163,11 +154,11 @@
 					</div>
 					<div>
 						<dt>tenant</dt>
-						<dd>{data.session?.tenantId ?? 'Unavailable'}</dd>
+						<dd>{data.session?.tenantId ?? '—'}</dd>
 					</div>
 					<div>
 						<dt>scopes</dt>
-						<dd>{data.session?.scopes?.length ?? 0}</dd>
+						<dd>{data.session?.scopes?.length ? `${data.session.scopes.length}` : 'No scopes'}</dd>
 					</div>
 				</dl>
 
@@ -177,7 +168,7 @@
 							<span>{scope}</span>
 						{/each}
 					{:else}
-						<p>Protected routes require a valid session with appropriate scopes.</p>
+						<p>No scopes</p>
 					{/if}
 				</div>
 
@@ -189,7 +180,7 @@
 								<span>{scope}</span>
 							{/each}
 						{:else}
-							<p>Protected routes require a valid session with appropriate scopes.</p>
+							<p>No scopes</p>
 						{/if}
 					</div>
 				</details>
@@ -234,6 +225,7 @@
 		font-weight: 500;
 		letter-spacing: 0.02em;
 		color: var(--text);
+		text-decoration: none;
 	}
 
 	.shell__brand-dot {
@@ -267,12 +259,12 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.25rem 0.65rem;
-		background: var(--bg-2);
-		border: 1px solid var(--border);
+		padding: 0.15rem 0;
+		background: transparent;
+		border: 0;
 		border-radius: var(--radius-sm);
-		font-size: 0.78rem;
-		color: var(--text-muted);
+		font-size: 0.74rem;
+		color: var(--text-faint);
 		font-family: var(--font-mono);
 	}
 
@@ -432,18 +424,18 @@
 	}
 
 	.shell__session-card {
-		margin: 0.85rem 0.75rem 0;
-		padding: 0.85rem;
-		border-radius: var(--radius-md);
+		margin: 0;
+		padding: 0.85rem 1rem 1rem;
+		border-radius: 0;
 		display: grid;
-		gap: 0.75rem;
-		background: var(--bg-2);
-		border: 1px solid var(--border);
+		gap: 0.6rem;
+		background: transparent;
+		border: 0;
+		border-top: 1px solid var(--border);
 	}
 
 	.shell__session-area {
 		grid-area: session;
-		padding-bottom: 1rem;
 		background: var(--bg-1);
 		border-right: 1px solid var(--border);
 	}
@@ -468,8 +460,8 @@
 		justify-content: space-between;
 		align-items: baseline;
 		gap: 0.5rem;
-		padding: 0.35rem 0;
-		border-bottom: 1px solid var(--border);
+		padding: 0.22rem 0;
+		border-bottom: 0;
 	}
 
 	.shell__session-card dl div:last-child {
@@ -480,7 +472,7 @@
 	.shell__session-card dd {
 		margin: 0;
 		font-family: var(--font-mono);
-		font-size: 0.78rem;
+		font-size: 0.76rem;
 	}
 
 	.shell__session-card dt {
@@ -507,11 +499,11 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		padding: 0.2rem 0.45rem;
+		padding: 0.15rem 0.4rem;
 		border-radius: 3px;
 		background: var(--bg-3);
 		border: 1px solid var(--border);
-		font-size: 0.72rem;
+		font-size: 0.68rem;
 		font-family: var(--font-mono);
 		color: var(--text-muted);
 	}
@@ -553,20 +545,30 @@
 		color: var(--text);
 	}
 
+	.shell__viewport {
+		width: min(1080px, calc(100% - 3rem));
+		margin: 0 auto;
+	}
+
 	main:focus-visible {
 		outline-offset: -3px;
 	}
 
 	.shell__footer {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.85rem 1.75rem;
+		padding: 0.85rem 0;
 		border-top: 1px solid var(--border);
 		font-size: 0.78rem;
 		font-family: var(--font-mono);
 		color: var(--text-faint);
+	}
+
+	.shell__footer-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		width: min(1080px, calc(100vw - 3rem));
+		margin: 0 auto;
 	}
 
 	.shell__footer-right {
@@ -628,7 +630,7 @@
 		}
 
 		.shell__session-card {
-			margin: 1rem 1.75rem 0;
+			padding-inline: 1.75rem;
 		}
 
 		.shell__scope-list--desktop {
@@ -658,18 +660,14 @@
 			width: 100%;
 		}
 
-		.shell__footer {
-			flex-direction: column;
-			align-items: flex-start;
-		}
-
+		.shell__footer-inner,
 		.shell__footer-right {
 			flex-direction: column;
 			align-items: flex-start;
 		}
 
 		.shell__session-card {
-			margin-inline: 1rem;
+			padding-inline: 1rem;
 		}
 
 		.shell__session-card dl div {

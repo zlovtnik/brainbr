@@ -13,13 +13,14 @@
 		error?: string;
 	}
 
-	let { id, name, label, value, options, error }: Props = $props();
+	let { id, name, label, value = $bindable(), options, error }: Props = $props();
 	let errorId = $derived(error ? `${id}-error` : undefined);
 </script>
 
-<label class="field" for={id}>
+<label class="field">
 	<span class="field__label">{label}</span>
 	<select
+		bind:value
 		class="field__select"
 		class:field__select--error={Boolean(error)}
 		{id}
@@ -29,7 +30,7 @@
 		aria-invalid={Boolean(error)}
 	>
 		{#each options as option}
-			<option selected={option.value === value} value={option.value}>
+			<option value={option.value}>
 				{option.label}
 			</option>
 		{/each}

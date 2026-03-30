@@ -60,13 +60,13 @@ export interface SessionShape {
 const capabilityList: CapabilityDefinition[] = [
 	{
 		id: 'platform',
-		title: 'Platform Info',
+		title: 'Operations Overview',
 		navLabel: 'Platform',
 		href: '/platform',
-		eyebrow: 'Public service surface',
-		headline: 'Start from the runtime contract instead of guessing what the backend exposes.',
+		eyebrow: 'Operations overview',
+		headline: 'See which models and services are driving the workspace right now.',
 		summary:
-			'Public platform metadata reports the service identity plus the embedding and LLM models currently configured on the Spring side.',
+			'Platform metadata gives operations teams a quick read on the live service and model stack behind BrainBR.',
 		availability: 'public',
 		scopes: [],
 		metrics: [
@@ -78,19 +78,18 @@ const capabilityList: CapabilityDefinition[] = [
 			{
 				label: 'Endpoints',
 				value: '1',
-				detail: 'Service info is exposed directly from the platform controller.'
+				detail: 'One public route reports the current platform profile.'
 			},
 			{
 				label: 'Use case',
-				value: 'Runtime health',
-				detail: 'Useful for validating which models are active before testing workflows.'
+				value: 'Readiness',
+				detail: 'Useful for confirming the active models before running operational workflows.'
 			}
 		],
 		workflows: [
 			{
 				title: 'Check active models',
-				description:
-					'Read the service, embedding model, and LLM model that the backend reports right now.',
+				description: 'Review the live service, embedding model, and LLM model in one place.',
 				status: 'live'
 			}
 		],
@@ -98,8 +97,8 @@ const capabilityList: CapabilityDefinition[] = [
 			{
 				method: 'GET',
 				path: '/api/v1/platform/info',
-				summary: 'Return runtime platform metadata.',
-				detail: 'Includes the service name plus the configured embedding and LLM models.'
+				summary: 'Return live platform metadata.',
+				detail: 'Includes the service name and the models currently powering the workspace.'
 			}
 		],
 		samples: [
@@ -116,14 +115,13 @@ const capabilityList: CapabilityDefinition[] = [
 	},
 	{
 		id: 'inventory',
-		title: 'Inventory Workspace',
+		title: 'Fiscal Catalog',
 		navLabel: 'Inventory',
 		href: '/inventory',
-		eyebrow: 'Tenant catalog control',
-		headline:
-			'Search, inspect, create, and edit tenant SKUs without leaking the bearer token to the browser.',
+		eyebrow: 'Fiscal catalog',
+		headline: 'Search, inspect, and update the catalog your tax teams rely on every day.',
 		summary:
-			'The inventory UI already talks to the Spring inventory API through the server-only SvelteKit boundary, with list, detail, create, and update flows in place.',
+			'Inventory keeps SKU search, detail, creation, and editing in one focused operational workspace.',
 		availability: 'protected',
 		scopes: ['inventory:read', 'inventory:write'],
 		metrics: [
@@ -135,35 +133,32 @@ const capabilityList: CapabilityDefinition[] = [
 			{
 				label: 'Endpoints',
 				value: '5+',
-				detail: 'List, detail, create, update, delete, and re-audit route family.'
+				detail: 'Browse, inspect, update, and trigger follow-on work from the same catalog surface.'
 			},
 			{
-				label: 'UI state',
-				value: 'Live',
-				detail: 'This is the most complete workflow currently implemented in the frontend.'
+				label: 'Coverage',
+				value: 'End-to-end',
+				detail: 'Catalog review and maintenance are ready for day-to-day use.'
 			}
 		],
 		workflows: [
 			{
 				title: 'Browse tenant catalog',
-				description:
-					'Filter and sort the SKU list directly from the server-rendered inventory index.',
+				description: 'Filter and sort the catalog to reach the right SKU fast.',
 				status: 'live',
 				ctaLabel: 'Open inventory',
 				href: '/inventory'
 			},
 			{
 				title: 'Create a SKU',
-				description:
-					'Send a new inventory payload through the server boundary into the Spring write API.',
+				description: 'Create a new SKU record without leaving the fiscal catalog.',
 				status: 'live',
 				ctaLabel: 'Create SKU',
 				href: '/inventory/new'
 			},
 			{
 				title: 'Inspect reform taxes',
-				description:
-					'Open any SKU detail to review legacy and reform tax maps with update timestamps.',
+				description: 'Open any SKU to review classifications, routes, and tax outputs.',
 				status: 'guided',
 				ctaLabel: 'View records',
 				href: '/inventory'
@@ -182,7 +177,7 @@ const capabilityList: CapabilityDefinition[] = [
 				path: '/api/v1/inventory/sku/{skuId}',
 				scope: 'inventory:read',
 				summary: 'Load a single SKU record.',
-				detail: 'Returns the inventory payload plus computed reform tax output.'
+				detail: 'Returns classifications, route data, and computed tax output for one SKU.'
 			},
 			{
 				method: 'POST',
@@ -203,8 +198,7 @@ const capabilityList: CapabilityDefinition[] = [
 				path: '/api/v1/inventory/sku/{skuId}/re-audit',
 				scope: 'audit:trigger',
 				summary: 'Queue a re-audit for a SKU.',
-				detail:
-					'This write lives under the inventory route family but belongs to the audit workflow.'
+				detail: 'Used when catalog changes need a fresh downstream audit.'
 			}
 		]
 	},
@@ -214,10 +208,9 @@ const capabilityList: CapabilityDefinition[] = [
 		navLabel: 'Audit',
 		href: '/audit',
 		eyebrow: 'Explain, search, and trigger',
-		headline:
-			'Audit is more than a button. It already exposes explainability, semantic query, and re-run triggers.',
+		headline: 'Understand why a fiscal decision was made and what to review next.',
 		summary:
-			'The backend supports direct SKU explain responses, vector-style audit queries, and explicit re-audit trigger endpoints with separate scope gates.',
+			'Audit brings explainability, search, and re-run controls together for investigation and follow-up.',
 		availability: 'protected',
 		scopes: ['audit:read', 'audit:query', 'audit:trigger'],
 		metrics: [
@@ -233,29 +226,26 @@ const capabilityList: CapabilityDefinition[] = [
 			},
 			{
 				label: 'Best entry',
-				value: 'Inventory + query',
-				detail: 'Re-audit ties back to SKU state, while search lets you inspect legal context.'
+				value: 'Catalog-led',
+				detail: 'Start from a SKU or jump straight into legal-context search.'
 			}
 		],
 		workflows: [
 			{
 				title: 'Explain a SKU',
-				description:
-					'Retrieve reform taxes, model metadata, and source law details for a specific SKU.',
+				description: 'Inspect the reasoning, tax output, and legal basis behind one SKU.',
 				status: 'guided',
 				ctaLabel: 'Start from inventory',
 				href: '/inventory'
 			},
 			{
 				title: 'Run semantic law query',
-				description:
-					'Query the audit corpus with `k` results and optional filters for law type or publication window.',
+				description: 'Search the audit knowledge base with filters for the legal context you need.',
 				status: 'live'
 			},
 			{
 				title: 'Trigger re-audit',
-				description:
-					'Recompute audit output for a SKU when classification or legal inputs changed.',
+				description: 'Run a fresh audit after catalog or legal inputs change.',
 				status: 'guided',
 				ctaLabel: 'Open inventory',
 				href: '/inventory'
@@ -305,10 +295,9 @@ const capabilityList: CapabilityDefinition[] = [
 		navLabel: 'Compliance',
 		href: '/compliance',
 		eyebrow: 'Replay and evidence',
-		headline:
-			'Compliance exposes artifact retrieval so audit output can be inspected, replayed, and evidenced.',
+		headline: 'Pull the evidence trail behind every explainability run.',
 		summary:
-			'Artifact endpoints expose run metadata, request IDs, vector references, replay context, and full RAG output for explainability investigations.',
+			'Compliance keeps the evidence package for each explainability run close at hand for review and replay.',
 		availability: 'protected',
 		scopes: ['compliance:read'],
 		metrics: [
@@ -324,8 +313,8 @@ const capabilityList: CapabilityDefinition[] = [
 			},
 			{
 				label: 'Payload',
-				value: 'Deep trace',
-				detail: 'Includes replay context, source metadata, vector IDs, and timestamps.'
+				value: 'Evidence rich',
+				detail: 'Includes replay context, source metadata, identifiers, and timestamps.'
 			}
 		],
 		workflows: [
@@ -372,11 +361,10 @@ source, replay_context, rag_output, created_at`
 		title: 'Split Payment Events',
 		navLabel: 'Split Payment',
 		href: '/split-payment',
-		eyebrow: 'Event ingestion and history',
-		headline:
-			'Split payment already supports both write-side event intake and read-side tenant event history.',
+		eyebrow: 'Events and history',
+		headline: 'Track split-payment events from intake through tenant history.',
 		summary:
-			'The backend accepts structured split payment events with idempotency keys and exposes a paged event history filtered by SKU or event type.',
+			'Split payment keeps event intake and historical review aligned in a single operational surface.',
 		availability: 'protected',
 		scopes: ['split_payment:read', 'split_payment:write'],
 		metrics: [
@@ -393,7 +381,7 @@ source, replay_context, rag_output, created_at`
 			{
 				label: 'Data model',
 				value: 'Idempotent',
-				detail: 'Create payload requires an idempotency key plus event metadata.'
+				detail: 'Each event carries a unique key plus the metadata needed for reconciliation.'
 			}
 		],
 		workflows: [
@@ -451,11 +439,10 @@ source, replay_context, rag_output, created_at`
 		title: 'Regulatory Ingestion',
 		navLabel: 'Ingestion',
 		href: '/ingestion',
-		eyebrow: 'Queue new legal inputs',
-		headline:
-			'Ingestion is already queue-backed at the API layer, ready to accept new law references and source material.',
+		eyebrow: 'Queue legal inputs',
+		headline: 'Bring new law references into the workspace without breaking operational flow.',
 		summary:
-			'The backend validates source URLs or raw content, binds the job to the current tenant company, and returns an accepted queue response with a job ID.',
+			'Ingestion accepts new legal references and returns a queued job so teams can keep moving while processing happens in the background.',
 		availability: 'protected',
 		scopes: ['ingestion:write'],
 		metrics: [

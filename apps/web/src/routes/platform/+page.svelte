@@ -18,21 +18,21 @@
 			value: platformInfo.service,
 			detail: data.platformInfo
 				? 'Live response.'
-				: (data.platformError ?? 'Reference value while the probe is unavailable.')
+				: (data.platformError ?? 'Reference value while live telemetry is unavailable.')
 		},
 		{
 			label: 'Embedding model',
 			value: platformInfo.embeddingModel,
 			detail: data.platformInfo
 				? 'Live response.'
-				: 'Fallback display aligned with the expected Spring configuration.'
+				: 'Reference display for the expected embedding setup.'
 		},
 		{
 			label: 'LLM model',
 			value: platformInfo.llmModel,
 			detail: data.platformInfo
 				? 'Live response.'
-				: 'Fallback display aligned with the expected Spring configuration.'
+				: 'Reference display for the expected generation setup.'
 		}
 	]);
 </script>
@@ -41,7 +41,7 @@
 	<title>Platform | BrainBR</title>
 	<meta
 		name="description"
-		content="Inspect public backend platform metadata and use it as the front door to the BrainBR workspace."
+		content="Inspect BrainBR platform metadata and confirm the live service and model profile."
 	/>
 	<link rel="canonical" href={`${page.url.origin}/platform`} />
 </svelte:head>

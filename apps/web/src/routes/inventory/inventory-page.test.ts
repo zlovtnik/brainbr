@@ -46,8 +46,7 @@ const data = {
 		query: '',
 		includeInactive: false
 	},
-	loadError: null,
-	successMessage: undefined
+	loadError: null
 } satisfies PageProps['data'];
 
 describe('inventory page', () => {
@@ -67,6 +66,9 @@ describe('inventory page', () => {
 		const sortField = screen.getByLabelText('Sort field');
 
 		expect(Boolean(search.compareDocumentPosition(sortField) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
+			true
+		);
+		expect(screen.getByRole('button', { name: 'Previous page' }).hasAttribute('disabled')).toBe(
 			true
 		);
 	});

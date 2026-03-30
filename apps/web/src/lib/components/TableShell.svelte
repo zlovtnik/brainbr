@@ -43,8 +43,8 @@
 		background-color: var(--bg-3) !important;
 	}
 
-	:global(th),
-	:global(td) {
+	:global(.table-shell th),
+	:global(.table-shell td) {
 		padding: 1rem;
 		text-align: left;
 		border-top: 1px solid var(--border);
@@ -53,7 +53,7 @@
 		color: var(--text);
 	}
 
-	:global(th) {
+	:global(.table-shell th) {
 		font-size: 0.82rem;
 		font-family: var(--font-mono);
 		color: var(--text-faint);

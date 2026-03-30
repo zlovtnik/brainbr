@@ -10,7 +10,7 @@
 
 <svelte:head>
 	<title>Audit | BrainBR</title>
-	<meta name="description" content="Explore explainability, query, and re-audit backend capabilities." />
+	<meta name="description" content="Explore explainability, search, and re-audit flows in BrainBR." />
 	<link rel="canonical" href={`${page.url.origin}/audit`} />
 </svelte:head>
 

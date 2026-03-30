@@ -22,8 +22,8 @@
 		width: 1.2rem;
 		height: 1.2rem;
 		border-radius: 999px;
-		border: 3px solid rgba(16, 49, 30, 0.15);
-		border-top-color: var(--color-accent);
+		border: 3px solid rgba(255, 255, 255, 0.12);
+		border-top-color: var(--color-accent-vivid);
 		animation: spin 0.9s linear infinite;
 	}
 

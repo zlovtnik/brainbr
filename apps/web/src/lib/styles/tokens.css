@@ -1,5 +1,6 @@
 :root {
 	--bg: #0d0f12;
+	--bg-rgb: 13, 15, 18;
 	--bg-1: #12151a;
 	--bg-2: #181c23;
 	--bg-3: #1e222b;
@@ -7,9 +8,10 @@
 	--border-strong: #323844;
 	--line: rgba(255, 255, 255, 0.04);
 	--text: #e8eaf0;
-	--text-muted: #b4bcc9;
+	--text-muted: #c4cad5;
 	--text-faint: #98a1b2;
 	--accent: #4f8ef7;
+	--accent-vivid: #7ab1ff;
 	--accent-soft: rgba(79, 142, 247, 0.12);
 	--accent-border: rgba(79, 142, 247, 0.3);
 	--success: #3ecf8e;
@@ -35,9 +37,9 @@
 	--space-5: 1.5rem;
 	--space-6: 2rem;
 	--space-7: 3rem;
-	--font-sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
-	--font-display: var(--font-sans);
-	--font-serif: var(--font-sans);
+	--font-sans: 'DM Sans', 'Segoe UI', sans-serif;
+	--font-display: 'Fraunces', Georgia, serif;
+	--font-serif: var(--font-display);
 	--font-mono: 'IBM Plex Mono', 'SFMono-Regular', 'Menlo', monospace;
 	--color-ink: var(--text);
 	--color-ink-muted: var(--text-muted);
@@ -49,11 +51,13 @@
 	--color-border-strong: var(--border-strong);
 	--color-line: var(--line);
 	--color-accent: var(--accent);
+	--color-accent-vivid: var(--accent-vivid);
 	--color-accent-strong: var(--accent);
 	--color-accent-soft: var(--accent-soft);
 	--color-info-border: var(--accent-border);
 	--color-danger: var(--danger);
 	--color-danger-soft: var(--danger-soft);
+	--color-danger-border: var(--danger-border);
 	--color-error-border: var(--danger-border);
 	--color-warning: var(--warning);
 	--color-warning-soft: var(--warning-soft);

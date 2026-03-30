@@ -20,22 +20,20 @@
 	>([
 		{
 			label: 'Access',
-			value: data.loadError ? 'Blocked' : 'Scoped',
-			detail: data.loadError
-				? 'Current session is missing the required inventory scopes.'
-				: 'Session-gated inventory surface is available.',
-			tone: data.loadError ? 'warning' : 'success'
+			value: 'Scoped',
+			detail: 'Inventory access is available for the current session.',
+			tone: 'success'
 		},
 		{
-			label: 'Visible results',
-			value: String(data.inventory?.items.length ?? 0),
-			detail: `${data.inventory?.totalCount ?? 0} total matches for the current filters.`,
+			label: 'Catalog matches',
+			value: String(data.inventory?.totalCount ?? 0),
+			detail: `${data.inventory?.items.length ?? 0} records on this page.`,
 			tone: 'accent'
 		},
 		{
 			label: 'Current view',
-			value: `P${data.filters.page} · ${data.filters.sortBy}:${data.filters.sortOrder}`,
-			detail: `Limit ${data.filters.limit} per request.`,
+			value: `Page ${data.filters.page}`,
+			detail: `${data.filters.sortBy.replaceAll('_', ' ')} · ${data.filters.sortOrder} · ${data.filters.limit} per page.`,
 			tone: 'default'
 		}
 	]);
@@ -70,9 +68,9 @@
 	<WorkspaceHeader
 		tag={['GET', '/api/v1/inventory/sku']}
 		title={capability.navLabel}
-		description="Search the tenant catalog, inspect tax payloads, and move directly into edits through the server-rendered inventory boundary."
-		statusLabel={data.loadError ? 'Scope or API issue' : 'Server-rendered inventory'}
-		statusTone={data.loadError ? 'warning' : 'success'}
+		description="Filter, sort, and drill into any SKU. Changes land instantly."
+		statusLabel="Fiscal catalog live"
+		statusTone="success"
 		primaryAction={{ href: '/inventory/new', label: 'Create SKU' }}
 	/>
 
@@ -81,103 +79,105 @@
 	<div class="inventory-stack">
 		<SectionPanel
 			title="Filters"
-			subtitle="Keep search first, then tune sorting and visibility before reloading the result set."
+			subtitle="Search first, then tune sorting and visibility."
 		>
-			{#snippet meta()}
-				{#if isLoading}
-					<Spinner label="Refreshing inventory" />
-				{/if}
-			{/snippet}
-
 			{#snippet children()}
-			<form aria-describedby="inventory-filter-help" class="filters" method="GET" role="search">
-				<input type="hidden" name="limit" value={data.filters.limit} />
-				<label class="filters__search" for="query">
-					<span>Search</span>
-					<input
-						id="query"
-						name="query"
-						placeholder="SKU, description, or NCM code"
-						type="search"
-						value={data.filters.query}
-					/>
-				</label>
+				<form aria-describedby="inventory-filter-help" class="filters" method="GET" role="search">
+					<input type="hidden" name="limit" value={data.filters.limit} />
+					<div class="filters__row">
+						<label class="filters__search" for="query">
+							<span>Search</span>
+							<input
+								id="query"
+								name="query"
+								placeholder="SKU, description, or NCM code"
+								type="search"
+								value={data.filters.query}
+							/>
+						</label>
 
-				<div class="filters__secondary">
-					<Select
-						id="sortBy"
-						label="Sort field"
-						name="sortBy"
-						options={[
-							{ value: 'updated_at', label: 'Updated time' },
-							{ value: 'sku_id', label: 'SKU ID' }
-						]}
-						value={data.filters.sortBy}
-					/>
+						<div class="filters__secondary">
+							<Select
+								id="sortBy"
+								label="Sort field"
+								name="sortBy"
+								options={[
+									{ value: 'updated_at', label: 'Updated time' },
+									{ value: 'sku_id', label: 'SKU ID' }
+								]}
+								value={data.filters.sortBy}
+							/>
 
-					<Select
-						id="sortOrder"
-						label="Sort direction"
-						name="sortOrder"
-						options={[
-							{ value: 'desc', label: 'Newest first' },
-							{ value: 'asc', label: 'Oldest / A-Z first' }
-						]}
-						value={data.filters.sortOrder}
-					/>
+							<Select
+								id="sortOrder"
+								label="Sort direction"
+								name="sortOrder"
+								options={[
+									{ value: 'desc', label: 'Newest first' },
+									{ value: 'asc', label: 'Oldest / A-Z first' }
+								]}
+								value={data.filters.sortOrder}
+							/>
+						</div>
+					</div>
 
-					<label class="filters__toggle">
-						<input
-							checked={data.filters.includeInactive}
-							name="includeInactive"
-							type="checkbox"
-							value="true"
-						/>
-						<span>Include inactive SKUs</span>
-					</label>
-				</div>
+					<div class="filters__toolbar">
+						<label class="filters__toggle">
+							<input
+								checked={data.filters.includeInactive}
+								name="includeInactive"
+								type="checkbox"
+								value="true"
+							/>
+							<span>Include inactive SKUs</span>
+						</label>
 
-				<div class="filters__actions">
-					<button class="text-link text-link--primary" type="submit">Apply filters</button>
-				</div>
+						<div class="filters__actions">
+							<button class="text-link text-link--primary" type="submit">Apply filters</button>
+						</div>
+					</div>
 
-				<p class="sr-only" id="inventory-filter-help">
-					Search by SKU, description, or NCM code, then apply filters to reload the current page.
-				</p>
-			</form>
+					<p class="sr-only" id="inventory-filter-help">
+						Search by SKU, description, or NCM code, then apply filters to reload the current page.
+					</p>
+				</form>
 			{/snippet}
 		</SectionPanel>
 
 		<SectionPanel
 			title="Results"
-			subtitle="Keep the current page of inventory visible immediately after filter changes."
+			subtitle="Review the current page while refreshed results are on the way."
 		>
 			{#snippet children()}
-				<InventoryTable
-					inventory={data.inventory}
-					loadError={data.loadError ?? undefined}
-					successMessage={data.successMessage ?? undefined}
-				/>
+				<div class:results-shell--loading={isLoading} class="results-shell">
+					{#if isLoading}
+						<div aria-live="polite" class="results-shell__overlay">
+							<Spinner label="Refreshing inventory results" />
+						</div>
+					{/if}
 
-				{#if data.inventory}
-					<nav aria-label="Pagination" class="pager">
-						{#if data.filters.page > 1}
-							<a class="text-link" href={buildPageHref(data.filters.page - 1)}>Previous page</a>
-						{:else}
-							<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1"
-								>Previous page</span
-							>
-						{/if}
-						<span class="pager__current">Page {data.filters.page}</span>
-						{#if data.inventory.hasMore}
-							<a class="text-link" href={buildPageHref(data.filters.page + 1)}>Next page</a>
-						{:else}
-							<span aria-disabled="true" class="text-link text-link--disabled" tabindex="-1"
-								>Next page</span
-							>
-						{/if}
-					</nav>
-				{/if}
+					<InventoryTable inventory={data.inventory} />
+
+					{#if data.inventory}
+						<nav aria-label="Pagination" class="pager">
+							{#if data.filters.page > 1}
+								<a class="text-link" href={buildPageHref(data.filters.page - 1)}>Previous page</a>
+							{:else}
+								<button class="text-link text-link--disabled" disabled type="button">
+									Previous page
+								</button>
+							{/if}
+							<span class="pager__current">Page {data.filters.page}</span>
+							{#if data.inventory.hasMore}
+								<a class="text-link" href={buildPageHref(data.filters.page + 1)}>Next page</a>
+							{:else}
+								<button class="text-link text-link--disabled" disabled type="button">
+									Next page
+								</button>
+							{/if}
+						</nav>
+					{/if}
+				</div>
 			{/snippet}
 		</SectionPanel>
 	</div>
@@ -202,6 +202,13 @@
 	.filters {
 		display: grid;
 		gap: var(--space-4);
+	}
+
+	.filters__row {
+		display: grid;
+		grid-template-columns: minmax(280px, 2.2fr) minmax(0, 1.3fr);
+		gap: var(--space-4);
+		align-items: end;
 	}
 
 	.filters__search,
@@ -233,7 +240,7 @@
 
 	.filters__secondary {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-4);
 	}
 
@@ -264,10 +271,19 @@
 		accent-color: var(--color-accent-strong);
 	}
 
+	.filters__toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: center;
+		gap: var(--space-4);
+	}
+
 	.filters__actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-3);
+		margin-left: auto;
 	}
 
 	.text-link {
@@ -310,6 +326,23 @@
 		background: var(--bg-2);
 	}
 
+	.results-shell {
+		position: relative;
+		display: grid;
+		gap: 1rem;
+	}
+
+	.results-shell__overlay {
+		position: absolute;
+		inset: 0 0 auto 0;
+		z-index: 1;
+		display: flex;
+		justify-content: center;
+		padding: 1rem;
+		background: linear-gradient(180deg, rgba(var(--bg-rgb, 13, 15, 18), 0.86), rgba(var(--bg-rgb, 13, 15, 18), 0));
+		pointer-events: none;
+	}
+
 	.pager {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, auto));
@@ -328,6 +361,7 @@
 	}
 
 	@media (max-width: 860px) {
+		.filters__row,
 		.filters__secondary {
 			grid-template-columns: 1fr;
 		}

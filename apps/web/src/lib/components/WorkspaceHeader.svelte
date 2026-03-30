@@ -60,7 +60,7 @@
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: 1.5rem;
-		padding: 1.5rem 1.75rem 1.25rem;
+		padding: 1.7rem 1.9rem 1.4rem;
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
 		background-color: var(--bg) !important;
@@ -86,17 +86,19 @@
 
 	.workspace-header__title {
 		margin: 0;
-		font-size: 1.3rem;
-		font-weight: 500;
-		letter-spacing: -0.01em;
+		font-family: var(--font-display);
+		font-size: clamp(1.9rem, 4vw, 2.8rem);
+		font-weight: 600;
+		line-height: 1.1;
+		letter-spacing: -0.03em;
 		color: var(--text);
 	}
 
 	.workspace-header__description {
 		margin: 0;
-		max-width: 56ch;
-		font-size: 0.93rem;
-		line-height: 1.5;
+		max-width: 58ch;
+		font-size: 0.98rem;
+		line-height: 1.58;
 		color: var(--text-muted);
 	}
 

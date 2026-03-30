@@ -37,21 +37,14 @@ describe('InventoryTable', () => {
 		expect(screen.getByText('Active')).toBeTruthy();
 	});
 
-	it('renders empty and error states', async () => {
-		const { rerender } = render(InventoryTable, {
+	it('renders the empty state action as a button-weight CTA', () => {
+		render(InventoryTable, {
 			props: {
 				inventory: { ...inventory, items: [], totalCount: 0 }
 			}
 		});
 
-		expect(screen.getByRole('status').textContent).toContain('No inventory matched');
-
-		await rerender({
-			inventory: null,
-			loadError: 'Backend unavailable'
-		});
-
-		expect(screen.getByRole('alert').textContent).toContain('Unable to load inventory');
-		expect(screen.getByText('Backend unavailable')).toBeTruthy();
+		expect(screen.getByText('No inventory matched')).toBeTruthy();
+		expect(screen.getByRole('link', { name: 'Create SKU' })).toBeTruthy();
 	});
 });

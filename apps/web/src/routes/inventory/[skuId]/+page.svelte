@@ -20,6 +20,8 @@
 </svelte:head>
 
 <section class="stack">
+	<a class="back-link" href="/inventory">← Back to inventory</a>
+
 	<div class="cluster">
 		<p class="eyebrow">Inventory detail</p>
 		<Badge text={data.item.isActive ? 'Active' : 'Inactive'} variant={data.item.isActive ? 'success' : 'warning'} />
@@ -27,7 +29,7 @@
 
 	<div class="cluster detail-header">
 		<div class="stack">
-			<h1 class="headline">{data.item.skuId}</h1>
+			<h1 class="headline mono">{data.item.skuId}</h1>
 			<p class="lede">{data.item.description}</p>
 		</div>
 		<Button href={`/inventory/${encodeURIComponent(data.item.skuId)}/edit`}>
@@ -42,18 +44,18 @@
 	<div class="meta-grid">
 		<Card>
 			<p class="eyebrow">Classification</p>
-			<h2>{data.item.ncmCode}</h2>
-			<p class="lede">NCM code used for inventory transition analysis.</p>
+			<h2 class="mono">{data.item.ncmCode}</h2>
+			<p class="lede">Fiscal classification code.</p>
 		</Card>
 		<Card>
 			<p class="eyebrow">Route</p>
-			<h2>{data.item.originState} to {data.item.destinationState}</h2>
-			<p class="lede">Origin and destination states carried to the API payload.</p>
+			<h2 class="mono">{data.item.originState} → {data.item.destinationState}</h2>
+			<p class="lede">Interstate tax route.</p>
 		</Card>
 		<Card>
 			<p class="eyebrow">Last updated</p>
-			<h2>{formatInventoryTimestamp(data.item.updatedAt)}</h2>
-			<p class="lede">Timestamp returned by the backend inventory contract.</p>
+			<h2 class="mono">{formatInventoryTimestamp(data.item.updatedAt)}</h2>
+			<p class="lede">Last modified.</p>
 		</Card>
 	</div>
 
@@ -67,7 +69,7 @@
 					{#each Object.entries(data.item.legacyTaxes) as [name, value]}
 						<div>
 							<dt>{name.toUpperCase()}</dt>
-							<dd>{value}</dd>
+							<dd class="mono">{value}</dd>
 						</div>
 					{/each}
 				</dl>
@@ -84,7 +86,7 @@
 					{#each Object.entries(data.item.reformTaxes) as [name, value]}
 						<div>
 							<dt>{name.toUpperCase()}</dt>
-							<dd>{value}</dd>
+							<dd class="mono">{value}</dd>
 						</div>
 					{/each}
 				</dl>
@@ -99,6 +101,13 @@
 	h2 {
 		margin: 0;
 		font-size: 1.75rem;
+	}
+
+	.back-link {
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+		color: var(--text-muted);
+		text-decoration: none;
 	}
 
 	.detail-header {

@@ -25,15 +25,14 @@
 		readonly = false
 	}: Props = $props();
 
-	let labelId = $derived(`${id}-label`);
 	let errorId = $derived(error ? `${id}-error` : undefined);
 	let describedBy = $derived(
 		[hint ? `${id}-hint` : null, errorId].filter(Boolean).join(' ') || undefined
 	);
 </script>
 
-<label class="field">
-	<span class="field__label" id={labelId}>{label}</span>
+<div class="field">
+	<label class="field__label" for={id}>{label}</label>
 	{#if hint}
 		<span class="field__hint" id={`${id}-hint`}>{hint}</span>
 	{/if}
@@ -47,7 +46,6 @@
 		{placeholder}
 		{readonly}
 		{required}
-		aria-labelledby={labelId}
 		aria-invalid={Boolean(error)}
 		aria-describedby={describedBy}
 		aria-errormessage={errorId}
@@ -55,7 +53,7 @@
 	{#if error}
 		<span class="field__error" id={errorId}>{error}</span>
 	{/if}
-</label>
+</div>
 
 <style>
 	.field {

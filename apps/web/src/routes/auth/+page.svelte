@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import { tick } from 'svelte';
 	import Button from '$lib/components/Button.svelte';
 	import InlineNotice from '$lib/components/InlineNotice.svelte';
 	import SectionPanel from '$lib/components/SectionPanel.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 	import StatStrip from '$lib/components/StatStrip.svelte';
 	import WorkspaceHeader from '$lib/components/WorkspaceHeader.svelte';
 	import type { PageProps } from './$types';
@@ -10,26 +12,41 @@
 	let { data, form }: PageProps = $props();
 	let usernameField = $state<HTMLInputElement | undefined>();
 	let tokenField = $state<HTMLTextAreaElement | undefined>();
+	let submittingFlow = $state<'password' | 'quick' | 'token' | null>(null);
 	let statItems = [
 		{
-			label: 'Boundary',
-			value: 'Server only',
-			detail: 'The browser never sends tokens directly to the Spring API.',
+			label: 'Security',
+			value: 'Server-side',
+			detail: 'Your session is secured on the server, not in the browser.',
 			tone: 'success' as const
 		},
 		{
 			label: 'Session',
 			value: 'Signed cookie',
-			detail: 'Authentication state is stored in an HTTP-only cookie.',
+			detail: 'Authentication persists in an HTTP-only cookie.',
 			tone: 'accent' as const
 		},
 		{
 			label: 'Coverage',
-			value: 'Tenant scopes',
-			detail: 'Inventory, audit, compliance, split payment, and ingestion can be bootstrapped here.',
+			value: 'Tenant-ready',
+			detail: 'Use credentials or a scoped JWT to unlock the operational workspace you need.',
 			tone: 'default' as const
 		}
 	];
+
+	function withPending(formElement: HTMLFormElement, flow: 'password' | 'quick' | 'token') {
+		return enhance(formElement, () => {
+			submittingFlow = flow;
+
+			return async ({ update }) => {
+				try {
+					await update();
+				} finally {
+					submittingFlow = null;
+				}
+			};
+		});
+	}
 
 	$effect(() => {
 		if (form?.loginError) {
@@ -42,28 +59,43 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Sign in | FiscalBrain</title>
+	<meta name="description" content="Authenticate and get to work. Your session is secured server-side." />
+	<meta name="robots" content="noindex, nofollow" />
+</svelte:head>
+
 <section class="auth-page">
 	<WorkspaceHeader
 		tag={['AUTH', '/auth']}
-		title="Sign in to BrainBR"
-		description="Start with username and password for the standard path. Use the demo account for fast smoke tests, or open the advanced token flow when you need tenant-specific JWT scopes."
-		statusLabel="Server-side session bootstrap"
+		title="Authenticate and get to work."
+		description="Your session is secured server-side. The API never touches the browser."
+		statusLabel="Secure session"
 		statusTone="success"
 	/>
 
 	<StatStrip items={statItems} />
 
+	<div class="auth-checklist">
+		<p class="auth-checklist__eyebrow">Before you start</p>
+		<ol>
+			<li>Obtain a JWT from your IdP or use the standard credential flow.</li>
+			<li>Make sure the token carries <code>tenant_id</code> and the inventory scopes you need.</li>
+			<li>Paste the token below only when you need a tenant-specific session.</li>
+		</ol>
+	</div>
+
 	<div class="auth-panels">
 		<SectionPanel
 			title="Recommended sign in"
-			subtitle="Use the standard credential flow for the clearest, lowest-friction path into the app."
+			subtitle="Use credentials for the fastest path into the console."
 		>
 			{#snippet meta()}
 				<span class="auth-badge">Recommended</span>
 			{/snippet}
 
 			{#snippet children()}
-				<form class="stack" method="POST" action="?/password">
+				<form class="stack" method="POST" action="?/password" use:withPending={'password'}>
 					{#if form?.loginError}
 						<InlineNotice
 							id="login-error"
@@ -106,8 +138,15 @@
 					</p>
 
 					<div class="auth-actions">
-						<Button type="submit">
-							{#snippet children()}Sign in with credentials{/snippet}
+						<Button disabled={submittingFlow === 'password'} type="submit">
+							{#snippet children()}
+								{#if submittingFlow === 'password'}
+									<Spinner label="Signing in with credentials" />
+									Signing in…
+								{:else}
+									Sign in with credentials
+								{/if}
+							{/snippet}
 						</Button>
 					</div>
 				</form>
@@ -116,10 +155,10 @@
 
 		<SectionPanel
 			title="Demo sign in"
-			subtitle="Use the demo account when you want to move quickly through smoke tests or walkthroughs."
+			subtitle="Use the demo account for smoke tests and guided walkthroughs."
 		>
 			{#snippet children()}
-				<form class="stack" method="POST" action="?/quick">
+				<form class="stack" method="POST" action="?/quick" use:withPending={'quick'}>
 					{#if form?.quickError}
 						<InlineNotice
 							id="quick-error"
@@ -132,13 +171,19 @@
 					<input name="redirectTo" type="hidden" value={form?.redirectTo ?? data.redirectTo} />
 
 					<p class="auth-copy">
-						The demo path is useful for server-side verification, inventory walkthroughs, and broad
-						regression checks.
+						Use this path when you need access fast and do not need a tenant-specific JWT.
 					</p>
 
 					<div class="auth-actions">
-						<Button type="submit" variant="secondary">
-							{#snippet children()}Use demo account{/snippet}
+						<Button disabled={submittingFlow === 'quick'} type="submit" variant="secondary">
+							{#snippet children()}
+								{#if submittingFlow === 'quick'}
+									<Spinner label="Starting demo session" />
+									Starting demo session…
+								{:else}
+									Use demo account
+								{/if}
+							{/snippet}
 						</Button>
 					</div>
 				</form>
@@ -148,12 +193,12 @@
 
 	<SectionPanel
 		title="Advanced: use token"
-		subtitle="Open this only when you need to paste a JWT with tenant-specific scopes."
+		subtitle="Open this only when you need a tenant-specific JWT."
 		collapsible={true}
 		defaultOpen={false}
 	>
 		{#snippet children()}
-			<form class="stack" method="POST" action="?/token">
+			<form class="stack" method="POST" action="?/token" use:withPending={'token'}>
 				{#if form?.error}
 					<InlineNotice
 						id="token-error"
@@ -178,14 +223,20 @@
 						spellcheck="false">{form?.token ?? ''}</textarea
 					>
 					<span class="auth-field__hint" id="token-help">
-						The token never lands in browser storage. It is exchanged for a signed cookie on the
-						server.
+						Paste a backend-issued JWT. It will be exchanged for a signed cookie on the server.
 					</span>
 				</label>
 
 				<div class="auth-actions">
-					<Button type="submit">
-						{#snippet children()}Start authenticated session{/snippet}
+					<Button disabled={submittingFlow === 'token'} type="submit">
+						{#snippet children()}
+							{#if submittingFlow === 'token'}
+								<Spinner label="Starting authenticated session" />
+								Starting session…
+							{:else}
+								Start authenticated session
+							{/if}
+						{/snippet}
 					</Button>
 				</div>
 			</form>
@@ -197,6 +248,32 @@
 	.auth-page {
 		display: grid;
 		gap: 0;
+		padding-bottom: 1.5rem;
+	}
+
+	.auth-checklist {
+		display: grid;
+		gap: 0.5rem;
+		padding: 1.25rem 1.9rem;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.auth-checklist__eyebrow {
+		margin: 0;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.auth-checklist ol {
+		display: grid;
+		gap: 0.35rem;
+		margin: 0;
+		padding-left: 1.2rem;
+		color: var(--text-muted);
+		font-size: 0.95rem;
 	}
 
 	.auth-panels {
@@ -266,7 +343,7 @@
 	.auth-field__hint,
 	.auth-copy {
 		margin: 0;
-		color: var(--text-faint);
+		color: var(--text-muted);
 		font-size: 0.84rem;
 		line-height: 1.5;
 	}

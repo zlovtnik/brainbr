@@ -10,7 +10,7 @@
 
 <svelte:head>
 	<title>Split Payment | BrainBR</title>
-	<meta name="description" content="Inspect split payment event write and read backend capabilities." />
+	<meta name="description" content="Inspect split-payment intake and history workflows in BrainBR." />
 	<link rel="canonical" href={`${page.url.origin}/split-payment`} />
 </svelte:head>
 

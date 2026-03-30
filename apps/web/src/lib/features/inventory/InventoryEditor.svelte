@@ -4,6 +4,7 @@
 	import Card from '$lib/components/Card.svelte';
 	import InlineNotice from '$lib/components/InlineNotice.svelte';
 	import Input from '$lib/components/Input.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 	import type { InventoryFormErrors, InventoryFormValues } from '$lib/features/inventory/types';
 
 	interface FieldErrorLink {
@@ -49,6 +50,7 @@
 		formError?: string;
 		isEdit?: boolean;
 		cancelHref: string;
+		submitting?: boolean;
 	}
 
 	let {
@@ -59,7 +61,8 @@
 		errors = {},
 		formError,
 		isEdit = false,
-		cancelHref
+		cancelHref,
+		submitting = false
 	}: Props = $props();
 
 	let fieldErrors = $derived(collectFieldErrors(errors));
@@ -221,10 +224,21 @@
 		</section>
 
 		<div class="cluster">
-			<Button type="submit">
-				{#snippet children()}{submitLabel}{/snippet}
+			<Button disabled={submitting} type="submit">
+				{#snippet children()}
+					{#if submitting}
+						<Spinner label="Saving inventory" />
+						Saving…
+					{:else}
+						{submitLabel}
+					{/if}
+				{/snippet}
 			</Button>
-			<a class="editor-link" href={cancelHref}>Cancel</a>
+			{#if submitting}
+				<span class="editor-link editor-link--disabled">Cancel</span>
+			{:else}
+				<a class="editor-link" href={cancelHref}>Cancel</a>
+			{/if}
 		</div>
 	</Card>
 </div>
@@ -281,5 +295,11 @@
 		font-weight: 500;
 		color: var(--text-muted);
 		background: var(--bg-2);
+	}
+
+	.editor-link--disabled {
+		pointer-events: none;
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

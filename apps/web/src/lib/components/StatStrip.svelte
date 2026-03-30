@@ -15,10 +15,10 @@
 </script>
 
 <div class="stat-strip">
-	{#each visibleItems as item, index}
+	{#each visibleItems as item}
 		<div class="stat-strip__cell">
+			<p class={`stat-strip__value stat-strip__value--${item.tone ?? 'default'}`}>{item.value}</p>
 			<p class="stat-strip__label">{item.label}</p>
-			<h2 class={`stat-strip__value stat-strip__value--${item.tone ?? 'default'}`}>{item.value}</h2>
 			<p class="stat-strip__detail">{item.detail}</p>
 		</div>
 	{/each}
@@ -35,7 +35,7 @@
 
 	.stat-strip__cell {
 		display: grid;
-		gap: 0.2rem;
+		gap: 0.1rem;
 		padding: 1rem 1.25rem;
 		border-right: 1px solid var(--border);
 		background: var(--bg);
@@ -48,20 +48,23 @@
 
 	.stat-strip__label {
 		margin: 0;
-		font-size: 0.7rem;
+		font-size: 0.72rem;
 		font-family: var(--font-mono);
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		color: var(--text-faint);
+		order: 2;
 	}
 
 	.stat-strip__value {
 		margin: 0;
-		font-size: 1rem;
-		font-weight: 500;
-		font-family: var(--font-mono);
+		font-size: clamp(2.2rem, 4vw, 3rem);
+		font-weight: 600;
+		font-family: var(--font-display);
+		line-height: 1;
 		color: var(--text);
 		word-break: break-word;
+		order: 1;
 	}
 
 	.stat-strip__value--accent {
@@ -79,8 +82,8 @@
 	.stat-strip__detail {
 		margin: 0;
 		font-size: 0.78rem;
-		font-family: var(--font-mono);
-		color: var(--text-faint);
+		color: var(--text-muted);
+		order: 3;
 	}
 
 	@media (max-width: 720px) {

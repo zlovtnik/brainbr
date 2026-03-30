@@ -15,19 +15,37 @@
 		variant = 'primary',
 		type = 'button',
 		href,
+		disabled = false,
 		class: className = '',
 		...rest
 	}: Props = $props();
 
 	let classes = $derived(`button button--${variant}${className ? ` ${className}` : ''}`);
+
+	function handleAnchorClick(event: MouseEvent) {
+		if (!disabled) {
+			return;
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+	}
 </script>
 
 {#if href}
-	<a class={classes} {href} {...rest}>
+	<a
+		aria-disabled={disabled ? 'true' : undefined}
+		class={classes}
+		data-disabled={disabled ? 'true' : undefined}
+		{href}
+		onclick={handleAnchorClick}
+		tabindex={disabled ? -1 : undefined}
+		{...rest}
+	>
 		{@render children()}
 	</a>
 {:else}
-	<button class={classes} {type} {...rest}>
+	<button class={classes} {disabled} {type} {...rest}>
 		{@render children()}
 	</button>
 {/if}
@@ -57,6 +75,16 @@
 		color: var(--text);
 	}
 
+	.button:is([aria-disabled='true'], :disabled) {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.button:is([aria-disabled='true'], :disabled):hover {
+		transform: none;
+		box-shadow: none;
+	}
+
 	.button--primary {
 		background: rgba(79, 142, 247, 0.18);
 		color: #8bb5ff;
@@ -64,9 +92,15 @@
 	}
 
 	.button--primary:hover {
-		background: rgba(79, 142, 247, 0.24);
-		color: #b6d1ff;
-		border-color: var(--accent);
+		background: rgba(122, 177, 255, 0.28);
+		color: #d1e5ff;
+		border-color: var(--color-accent-vivid);
+	}
+
+	.button--primary[aria-disabled='true']:hover {
+		background: rgba(79, 142, 247, 0.18);
+		color: #8bb5ff;
+		border-color: var(--accent-border);
 	}
 
 	.button--secondary {
@@ -80,15 +114,16 @@
 		border-color: var(--border);
 	}
 
-	.button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-		transform: none;
+	.button--secondary[aria-disabled='true']:hover {
+		background: var(--bg-2);
+		color: var(--text);
+		border-color: var(--border);
 	}
 
-	.button:disabled:hover {
-		transform: none;
-		box-shadow: none;
+	.button--ghost[aria-disabled='true']:hover {
+		background: transparent;
+		color: var(--text-muted);
+		border-color: var(--border);
 	}
 
 	.button:focus-visible {

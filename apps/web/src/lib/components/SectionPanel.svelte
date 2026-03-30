@@ -98,11 +98,6 @@
 		min-width: 0;
 	}
 
-	.section-panel__title-row {
-		display: grid;
-		gap: 0.2rem;
-	}
-
 	.section-panel__title {
 		margin: 0;
 		font-size: 0.78rem;

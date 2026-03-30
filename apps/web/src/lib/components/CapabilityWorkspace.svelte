@@ -101,8 +101,8 @@
 				value: availability === 'public' ? 'Public' : availabilityText,
 				detail:
 					availability === 'public'
-						? 'No authentication required for the primary backend surface.'
-						: 'Route access depends on session scope coverage.'
+						? 'No sign-in required for the primary surface.'
+						: 'Access depends on the scopes in the current session.'
 			}
 	);
 	let operationalMetric = $derived.by(
@@ -111,7 +111,7 @@
 			capability.metrics.find((metric) => !isAuthMetric(metric) && !isEndpointMetric(metric)) ?? {
 				label: 'Status',
 				value: capability.workflows.some((workflow) => workflow.status === 'live') ? 'Live' : 'Guided',
-				detail: 'Use the workflow list below to move into the next backend capability.'
+				detail: 'Use the workflow list below to move into the next operational flow.'
 			}
 	);
 	let statItems = $derived([
@@ -126,8 +126,8 @@
 			value: String(capability.endpoints.length),
 			detail:
 				capability.endpoints.length === 1
-					? 'One backend route exposed for this capability.'
-					: `${capability.endpoints.length} backend routes exposed for this capability.`,
+					? 'One route supports this capability.'
+					: `${capability.endpoints.length} routes support this capability.`,
 			tone: 'accent' as const
 		},
 		{
@@ -181,7 +181,7 @@
 	<div class="body-grid">
 		<SectionPanel
 			title="Workflow guidance"
-			subtitle="Lead with the primary user path and keep support actions attached to each workflow."
+			subtitle="Lead with the primary user path and keep the next action close at hand."
 		>
 			{#snippet children()}
 				<div class="workflow-list">
@@ -213,7 +213,7 @@
 
 		<SectionPanel
 			title="Endpoint summaries"
-			subtitle="Expose the backend surface with one compact card per route."
+			subtitle="Review the route surface with one compact card per endpoint."
 		>
 			{#snippet children()}
 				<div class="endpoint-list">
