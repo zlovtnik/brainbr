@@ -299,6 +299,9 @@
 
 	.editor-link--disabled {
 		pointer-events: none;
+		user-select: none;
+		-webkit-user-select: none;
+		-moz-user-select: none;
 		opacity: 0.5;
 		cursor: not-allowed;
 	}

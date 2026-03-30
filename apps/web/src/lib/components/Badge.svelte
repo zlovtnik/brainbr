@@ -23,9 +23,9 @@
 	}
 
 	.badge--neutral {
-		background: var(--danger-soft);
-		color: var(--danger);
-		border-color: var(--danger-border);
+		background: var(--neutral-soft);
+		color: var(--neutral);
+		border-color: var(--neutral-border);
 	}
 
 	.badge--success {

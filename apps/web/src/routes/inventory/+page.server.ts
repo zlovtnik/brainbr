@@ -25,6 +25,7 @@ export const load: PageServerLoad = async (event) => {
 			);
 		}
 
-		throw error(500, 'A server error prevented inventory loading.');
+		// Re-throw unexpected errors so SvelteKit's global error handler catches them
+		throw cause;
 	}
 };

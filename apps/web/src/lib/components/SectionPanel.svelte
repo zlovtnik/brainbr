@@ -68,7 +68,6 @@
 		gap: 1rem;
 		padding: 1.5rem 1.75rem;
 		background: var(--bg);
-		background-color: var(--bg) !important;
 	}
 
 	.section-panel--collapsible {

@@ -63,7 +63,6 @@
 		padding: 1.7rem 1.9rem 1.4rem;
 		border-bottom: 1px solid var(--border);
 		background: var(--bg);
-		background-color: var(--bg) !important;
 	}
 
 	.workspace-header__copy {

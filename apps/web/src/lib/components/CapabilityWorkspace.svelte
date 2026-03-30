@@ -452,7 +452,7 @@
 	.sample-code code {
 		font-size: 0.8rem;
 		line-height: 1.5;
-		color: #a8c4f0;
+		color: var(--color-syntax);
 		white-space: pre;
 	}
 

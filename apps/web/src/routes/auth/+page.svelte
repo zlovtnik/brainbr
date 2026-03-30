@@ -12,6 +12,7 @@
 	let { data, form }: PageProps = $props();
 	let usernameField = $state<HTMLInputElement | undefined>();
 	let tokenField = $state<HTMLTextAreaElement | undefined>();
+	let quickForm = $state<HTMLFormElement | undefined>();
 	let submittingFlow = $state<'password' | 'quick' | 'token' | null>(null);
 	let statItems = [
 		{
@@ -51,6 +52,10 @@
 	$effect(() => {
 		if (form?.loginError) {
 			void tick().then(() => usernameField?.focus());
+			return;
+		}
+		if (form?.quickError) {
+			void tick().then(() => quickForm?.querySelector('button')?.focus());
 			return;
 		}
 		if (form?.error) {
@@ -158,7 +163,7 @@
 			subtitle="Use the demo account for smoke tests and guided walkthroughs."
 		>
 			{#snippet children()}
-				<form class="stack" method="POST" action="?/quick" use:withPending={'quick'}>
+				<form class="stack" method="POST" action="?/quick" use:withPending={'quick'} bind:this={quickForm}>
 					{#if form?.quickError}
 						<InlineNotice
 							id="quick-error"
@@ -213,7 +218,7 @@
 					<span class="auth-field__label">Bearer JWT</span>
 					<textarea
 						bind:this={tokenField}
-						aria-describedby={form?.error ? 'token-help token-error' : 'token-help'}
+						aria-describedby={form?.error ? 'token-error token-help' : 'token-help'}
 						aria-invalid={Boolean(form?.error)}
 						id="token"
 						name="token"

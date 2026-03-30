@@ -123,7 +123,7 @@ const capabilityList: CapabilityDefinition[] = [
 		summary:
 			'Inventory keeps SKU search, detail, creation, and editing in one focused operational workspace.',
 		availability: 'protected',
-		scopes: ['inventory:read', 'inventory:write'],
+		scopes: ['inventory:read', 'inventory:write', 'audit:trigger'],
 		metrics: [
 			{
 				label: 'Auth',

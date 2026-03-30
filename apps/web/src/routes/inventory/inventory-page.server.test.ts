@@ -55,7 +55,12 @@ describe('inventory page server load', () => {
 			}
 		});
 
-		expect(requireSession).toHaveBeenCalled();
-		expect(describeProtectedApiError).toHaveBeenCalled();
+		expect(requireSession).toHaveBeenCalledWith(
+			expect.objectContaining({ locals: expect.any(Object) })
+		);
+		expect(describeProtectedApiError).toHaveBeenCalledWith(
+			expect.any(ApiClientError),
+			expect.any(Object)
+		);
 	});
 });

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
 	import '$lib/styles/app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import {
@@ -29,10 +28,6 @@
 			return;
 		}
 
-		mainContent?.focus();
-	});
-
-	onMount(() => {
 		mainContent?.focus();
 	});
 
@@ -195,7 +190,6 @@
 		grid-template-rows: auto 1fr;
 		min-height: 100vh;
 		background: var(--bg);
-		background-color: var(--bg) !important;
 	}
 
 	.shell__topbar {

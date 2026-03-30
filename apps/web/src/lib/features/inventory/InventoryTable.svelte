@@ -7,13 +7,13 @@
 	import { formatInventoryTimestamp } from '$lib/utils/date';
 
 	interface Props {
-		inventory: InventoryListView | null;
+		inventory: InventoryListView;
 	}
 
 	let { inventory }: Props = $props();
 </script>
 
-{#if inventory && inventory.items.length > 0}
+{#if inventory.items.length > 0}
 	<TableShell caption={`Inventory results (${inventory.totalCount})`}>
 		<thead>
 			<tr>

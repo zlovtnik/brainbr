@@ -22,19 +22,11 @@ export const load: PageServerLoad = async ({ fetch }) => {
 	}
 
 	try {
-		let response: Response;
-		try {
-			response = await fetch(`${apiBaseUrl}/api/v1/platform/info`, {
-				headers: {
-					accept: 'application/json'
-				}
-			});
-		} catch {
-			return {
-				platformInfo: null,
-				platformError: 'Unable to reach the backend platform info endpoint.'
-			};
-		}
+		const response = await fetch(`${apiBaseUrl}/api/v1/platform/info`, {
+			headers: {
+				accept: 'application/json'
+			}
+		});
 
 		if (!response.ok) {
 			return {
@@ -54,10 +46,10 @@ export const load: PageServerLoad = async ({ fetch }) => {
 				platformError: `Platform info response could not be parsed as JSON: ${error instanceof Error ? error.message : 'Unknown parse failure'}.`
 			};
 		}
-	} catch {
+	} catch (error) {
 		return {
 			platformInfo: null,
-			platformError: 'Unable to reach the backend platform info endpoint.'
+			platformError: `Unexpected error while fetching platform info: ${error instanceof Error ? error.message : 'Unknown error'}.`
 		};
 	}
 };

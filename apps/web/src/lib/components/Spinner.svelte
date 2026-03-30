@@ -22,7 +22,7 @@
 		width: 1.2rem;
 		height: 1.2rem;
 		border-radius: 999px;
-		border: 3px solid rgba(255, 255, 255, 0.12);
+		border: 3px solid var(--spinner-track, rgba(var(--color-foreground-rgb), 0.12));
 		border-top-color: var(--color-accent-vivid);
 		animation: spin 0.9s linear infinite;
 	}

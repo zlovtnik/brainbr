@@ -34,6 +34,7 @@ describe('CapabilityWorkspace', () => {
 		});
 
 		expect(screen.getByText('Reference payloads')).toBeTruthy();
-		expect(container.querySelector('details')?.hasAttribute('open')).toBe(false);
+		const referencePayloadsDetails = screen.getByText('Reference payloads').closest('details');
+		expect(referencePayloadsDetails?.hasAttribute('open')).toBe(false);
 	});
 });

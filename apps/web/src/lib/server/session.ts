@@ -195,7 +195,19 @@ export function consumeFlash(cookies: Cookies): FlashMessage | null {
 	});
 
 	try {
-		return unsealValue<FlashMessage>(cookie);
+		const unsealed = unsealValue<FlashMessage>(cookie);
+		// Runtime validation: ensure unsealed value matches FlashMessage shape
+		if (
+			unsealed &&
+			typeof unsealed === 'object' &&
+			'type' in unsealed &&
+			'message' in unsealed &&
+			typeof unsealed.message === 'string' &&
+			['success', 'error', 'info'].includes(unsealed.type)
+		) {
+			return unsealed as FlashMessage;
+		}
+		return null;
 	} catch {
 		return null;
 	}

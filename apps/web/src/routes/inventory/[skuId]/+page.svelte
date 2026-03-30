@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 	import Badge from '$lib/components/Badge.svelte';
 	import Button from '$lib/components/Button.svelte';
@@ -20,7 +21,7 @@
 </svelte:head>
 
 <section class="stack">
-	<a class="back-link" href="/inventory">← Back to inventory</a>
+	<a class="back-link" href="{base}/inventory">← Back to inventory</a>
 
 	<div class="cluster">
 		<p class="eyebrow">Inventory detail</p>

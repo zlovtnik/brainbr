@@ -299,21 +299,39 @@ class QueueWorkerService(
     }
 
     private fun withLogContext(jobId: String?, companyId: String?, requestId: String?, block: () -> Unit) {
-        if (!jobId.isNullOrBlank()) {
-            MDC.put("job_id", jobId)
-        }
-        if (!companyId.isNullOrBlank()) {
-            MDC.put("company_id", companyId)
-        }
-        if (!requestId.isNullOrBlank()) {
-            MDC.put("request_id", requestId)
-        }
+        // Save previous MDC values so nested contexts don't lose outer context
+        val savedJobId = MDC.get("job_id")
+        val savedCompanyId = MDC.get("company_id")
+        val savedRequestId = MDC.get("request_id")
+        
         try {
+            if (!jobId.isNullOrBlank()) {
+                MDC.put("job_id", jobId)
+            }
+            if (!companyId.isNullOrBlank()) {
+                MDC.put("company_id", companyId)
+            }
+            if (!requestId.isNullOrBlank()) {
+                MDC.put("request_id", requestId)
+            }
             block()
         } finally {
-            MDC.remove("job_id")
-            MDC.remove("company_id")
-            MDC.remove("request_id")
+            // Restore previous values instead of unconditional remove
+            if (savedJobId != null) {
+                MDC.put("job_id", savedJobId)
+            } else {
+                MDC.remove("job_id")
+            }
+            if (savedCompanyId != null) {
+                MDC.put("company_id", savedCompanyId)
+            } else {
+                MDC.remove("company_id")
+            }
+            if (savedRequestId != null) {
+                MDC.put("request_id", savedRequestId)
+            } else {
+                MDC.remove("request_id")
+            }
         }
     }
 
