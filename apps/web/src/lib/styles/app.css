@@ -22,6 +22,7 @@
 
 :global(a) {
 	color: inherit;
+	text-underline-offset: 0.14em;
 }
 
 :global(button),

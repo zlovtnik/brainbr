@@ -59,11 +59,15 @@ app:
     heartbeat-interval-ms: ${WORKER_HEARTBEAT_INTERVAL_MS:60000}
     ingestion-poll-interval-ms: ${WORKER_INGESTION_POLL_INTERVAL_MS:2000}
     audit-poll-interval-ms: ${WORKER_AUDIT_POLL_INTERVAL_MS:2000}
+    transition-refresh-interval-ms: ${WORKER_TRANSITION_REFRESH_INTERVAL_MS:3600000}
   security:
     jwt:
       issuer-uri: ${APP_SECURITY_JWT_ISSUER_URI:}
       jwk-set-uri: ${APP_SECURITY_JWT_JWK_SET_URI:}
       tenant-claim: ${APP_SECURITY_JWT_TENANT_CLAIM:tenant_id}
+      enabled: ${APP_SECURITY_JWT_ENABLED:true}
+    bypass-rls:
+      enabled: ${APP_BYPASS_RLS_ENABLED:false}
 
 ---
 spring:

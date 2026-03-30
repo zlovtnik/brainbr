@@ -40,16 +40,25 @@
 					<td>{item.description}</td>
 					<td>{item.originState} to {item.destinationState}</td>
 					<td>
-						<Badge text={item.isActive ? 'Active' : 'Inactive'} variant={item.isActive ? 'success' : 'warning'} />
+						<Badge
+							text={item.isActive ? 'Active' : 'Inactive'}
+							variant={item.isActive ? 'success' : 'warning'}
+						/>
 					</td>
 					<td>{formatInventoryTimestamp(item.updatedAt)}</td>
-					<td><a class="table-link" href={`/inventory/${encodeURIComponent(item.skuId)}`}>View</a></td>
+					<td
+						><a class="table-link" href={`/inventory/${encodeURIComponent(item.skuId)}`}>View</a
+						></td
+					>
 				</tr>
 			{/each}
 		</tbody>
 	</TableShell>
 {:else}
-	<EmptyState message="Adjust your filters or create the first SKU to populate this workspace." title="No inventory matched">
+	<EmptyState
+		message="Adjust your filters or create the first SKU to populate this workspace."
+		title="No inventory matched"
+	>
 		{#snippet action()}
 			<a class="table-link" href="/inventory/new">Create SKU</a>
 		{/snippet}
@@ -60,7 +69,8 @@
 	.table-link {
 		display: inline-flex;
 		align-items: center;
-		min-height: 2.5rem;
+		justify-content: center;
+		min-height: 2.75rem;
 		padding: 0.65rem 0.95rem;
 		border-radius: 999px;
 		border: 1px solid var(--color-border);

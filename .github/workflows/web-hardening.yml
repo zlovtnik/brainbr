@@ -1,0 +1,48 @@
+name: Web Hardening
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/web-hardening.yml"
+      - "apps/web/**"
+      - "docs/svelte5-interactive-project.md"
+      - "docs/web-hardening.md"
+      - "docs/web-patterns.md"
+      - "package.json"
+      - "bun.lock"
+
+jobs:
+  web-hardening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a
+        with:
+          node-version: "22"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@4bc047acb3ef2e86cddcce00356c0a4a4c199d22
+        with:
+          bun-version: "1.3.11"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run unit tests
+        run: bun --filter web test:unit
+
+      - name: Run Svelte checks
+        run: bun --filter web check
+
+      - name: Run end-to-end and accessibility checks
+        run: bun --filter web test:e2e:ci

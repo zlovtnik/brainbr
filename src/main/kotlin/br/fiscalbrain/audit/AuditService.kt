@@ -13,6 +13,7 @@ import br.fiscalbrain.pipeline.KnowledgeRepository
 import br.fiscalbrain.pipeline.RagOutput
 import br.fiscalbrain.pipeline.SchemaValidationService
 import br.fiscalbrain.queue.AuditQueuePublisher
+import br.fiscalbrain.transition.TransitionMath
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.security.MessageDigest
@@ -276,6 +277,15 @@ class AuditService(
                 llmModelUsed = ragOutput.llmModelUsed
             )
 
+            val legacyTotal = generationContext.sku.legacyTaxes.values.mapNotNull { (it as? Number)?.toDouble() }.sum()
+            val reformTotal = ragOutput.reformTaxes.values.mapNotNull { (it as? Number)?.toDouble() }.sum()
+            val riskScore = TransitionMath.computeRiskScore(legacyTotal, reformTotal, ragOutput.auditConfidence)
+            auditRepository.updateRiskScore(
+                companyId = job.companyId,
+                skuId = job.skuId,
+                riskScore = riskScore
+            )
+
             auditRepository.appendAuditEvent(
                 companyId = job.companyId,
                 skuId = job.skuId,
@@ -316,16 +326,17 @@ class AuditService(
     private fun buildAuditPrompt(sku: AuditSkuRecord, chunkContents: List<String>): String {
         val context = chunkContents.joinToString(separator = "\n---\n")
         return """
-            Analyze the fiscal impact for the SKU and return a JSON object that matches the required schema.
-            SKU:
-            - sku_id: ${sku.skuId}
-            - description: ${sku.description}
-            - ncm_code: ${sku.ncmCode}
-            - origin_state: ${sku.originState}
-            - destination_state: ${sku.destinationState}
-            - legacy_taxes: ${sku.legacyTaxes}
+            You are a fiscal audit engine. Respond ONLY with valid JSON matching keys: reform_taxes (object), audit_confidence (number 0-1), llm_model_used (string), source (object with law_ref, content, source_url).
 
-            Legal context:
+            SKU:
+              sku_id: ${sku.skuId}
+              description: ${sku.description}
+              ncm_code: ${sku.ncmCode}
+              origin_state: ${sku.originState}
+              destination_state: ${sku.destinationState}
+              legacy_taxes: ${sku.legacyTaxes}
+
+            Candidate legal context chunks:
             $context
         """.trimIndent()
     }

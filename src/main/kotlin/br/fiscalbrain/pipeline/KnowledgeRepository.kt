@@ -17,7 +17,8 @@ class KnowledgeRepository(
 ) {
     private val mapTypeRef = object : TypeReference<Map<String, Any>>() {}
 
-    fun upsertKnowledgeDocument(
+    @Transactional
+    fun upsertVersionedKnowledge(
         companyId: UUID,
         lawRef: String,
         lawType: String,
@@ -28,25 +29,60 @@ class KnowledgeRepository(
         metadata: Map<String, Any>,
         contentHash: String
     ): KnowledgeDocument {
+        val existing = findActiveKnowledgeDocument(companyId, lawRef)
+        if (existing != null && existing.contentHash == contentHash) {
+            return existing
+        }
+
+        val newVersion = (existing?.contentVersion ?: 0) + 1
+        val inserted = insertKnowledgeDocument(
+            companyId = companyId,
+            lawRef = lawRef,
+            lawType = lawType,
+            content = content,
+            sourceUrl = sourceUrl,
+            publishedAt = publishedAt,
+            effectiveAt = effectiveAt,
+            metadata = metadata,
+            contentHash = contentHash,
+            contentVersion = newVersion
+        )
+
+        if (existing != null) {
+            jdbcTemplate.update(
+                """
+                UPDATE fiscal_knowledge_base
+                SET is_superseded = TRUE,
+                    superseded_by = ?,
+                    superseded_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = ? AND company_id = ?
+                """.trimIndent(),
+                inserted.id,
+                existing.id,
+                companyId
+            )
+        }
+
+        return inserted
+    }
+
+    private fun insertKnowledgeDocument(
+        companyId: UUID,
+        lawRef: String,
+        lawType: String,
+        content: String,
+        sourceUrl: String?,
+        publishedAt: LocalDate?,
+        effectiveAt: LocalDate?,
+        metadata: Map<String, Any>,
+        contentHash: String,
+        contentVersion: Int
+    ): KnowledgeDocument {
         val sql = """
             INSERT INTO fiscal_knowledge_base (
-                company_id, law_ref, law_type, content, metadata, source_url, published_at, effective_at, content_hash, content_version
-            ) VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, 1)
-            ON CONFLICT (law_ref, company_id)
-            DO UPDATE SET
-                law_type = EXCLUDED.law_type,
-                content = EXCLUDED.content,
-                metadata = EXCLUDED.metadata,
-                source_url = EXCLUDED.source_url,
-                published_at = EXCLUDED.published_at,
-                effective_at = EXCLUDED.effective_at,
-                content_hash = EXCLUDED.content_hash,
-                content_version = CASE
-                    WHEN fiscal_knowledge_base.content_hash IS DISTINCT FROM EXCLUDED.content_hash
-                        THEN fiscal_knowledge_base.content_version + 1
-                    ELSE fiscal_knowledge_base.content_version
-                END,
-                updated_at = NOW()
+                company_id, law_ref, law_type, content, metadata, source_url, published_at, effective_at, content_hash, content_version, is_superseded
+            ) VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, FALSE)
             RETURNING id, company_id, law_ref, law_type, content, source_url, content_hash, content_version
         """.trimIndent()
 
@@ -63,7 +99,8 @@ class KnowledgeRepository(
             sourceUrl,
             publishedAt,
             effectiveAt,
-            contentHash
+            contentHash,
+            contentVersion
         ) ?: throw IllegalStateException("Failed to upsert fiscal knowledge document")
     }
 
@@ -73,6 +110,22 @@ class KnowledgeRepository(
             FROM fiscal_knowledge_base
             WHERE company_id = ?
               AND law_ref = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """.trimIndent()
+        return jdbcTemplate.query(sql, knowledgeDocumentRowMapper(), companyId, lawRef).firstOrNull()
+    }
+
+    fun findActiveKnowledgeDocument(companyId: UUID, lawRef: String): KnowledgeDocument? {
+        val sql = """
+            SELECT id, company_id, law_ref, law_type, content, source_url, content_hash, content_version
+            FROM fiscal_knowledge_base
+            WHERE company_id = ?
+              AND law_ref = ?
+              AND is_superseded = FALSE
+            ORDER BY created_at DESC
+            LIMIT 1
+            FOR UPDATE
         """.trimIndent()
         return jdbcTemplate.query(sql, knowledgeDocumentRowMapper(), companyId, lawRef).firstOrNull()
     }
@@ -125,6 +178,7 @@ class KnowledgeRepository(
             INNER JOIN fiscal_knowledge_base b ON b.id = c.knowledge_id
             WHERE c.company_id = ?
               AND c.embedding IS NOT NULL
+              AND b.is_superseded = FALSE
             """.trimIndent()
         )
 
@@ -155,6 +209,7 @@ class KnowledgeRepository(
             INNER JOIN fiscal_knowledge_base b ON b.id = c.knowledge_id
             WHERE c.id = ?
               AND c.company_id = ?
+              AND b.is_superseded = FALSE
         """.trimIndent()
 
         return jdbcTemplate.query(sql, chunkSourceRowMapper(), chunkId, companyId).firstOrNull()

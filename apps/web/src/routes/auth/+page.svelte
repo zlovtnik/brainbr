@@ -1,10 +1,20 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Card from '$lib/components/Card.svelte';
 	import InlineNotice from '$lib/components/InlineNotice.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+	let tokenField = $state<HTMLTextAreaElement | undefined>();
+
+	$effect(() => {
+		if (!form?.error) {
+			return;
+		}
+
+		void tick().then(() => tokenField?.focus());
+	});
 </script>
 
 <section class="hero stack">
@@ -21,26 +31,37 @@
 		{#snippet header()}
 			<div class="stack">
 				<h2>Session token</h2>
-				<p class="lede">Use a JWT carrying `tenant_id` plus the `inventory:read` and `inventory:write` scopes.</p>
+				<p class="lede">
+					Use a JWT carrying `tenant_id` plus the `inventory:read` and `inventory:write` scopes.
+				</p>
 			</div>
 		{/snippet}
 
 		{#if form?.error}
-			<InlineNotice message={form.error} title="Invalid bootstrap token" variant="error" />
+			<InlineNotice
+				id="token-error"
+				message={form.error}
+				title="Invalid bootstrap token"
+				variant="error"
+			/>
 		{/if}
 
 		<input name="redirectTo" type="hidden" value={form?.redirectTo ?? data.redirectTo} />
 		<label class="auth-field" for="token">
 			<span class="auth-field__label">Bearer JWT</span>
 			<textarea
-				aria-describedby="token-help"
+				bind:this={tokenField}
+				aria-describedby={form?.error ? 'token-help token-error' : 'token-help'}
+				aria-invalid={Boolean(form?.error)}
 				class="auth-field__textarea"
 				id="token"
 				name="token"
 				placeholder="eyJhbGciOi..."
-				required
-			>{form?.token ?? ''}</textarea>
-			<span class="auth-field__hint" id="token-help">The token remains server-side in a signed cookie after submission.</span>
+				required>{form?.token ?? ''}</textarea
+			>
+			<span class="auth-field__hint" id="token-help"
+				>The token remains server-side in a signed cookie after submission.</span
+			>
 		</label>
 
 		<Button type="submit">

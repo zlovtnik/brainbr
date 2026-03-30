@@ -1,0 +1,345 @@
+openapi: 3.1.0
+info:
+  title: FiscalBrain BR API
+  version: 0.1.0
+servers:
+  - url: https://api.fiscalbrain.local/api/v1
+paths:
+  /transition/calendar:
+    get:
+      summary: List transition calendar weights
+      responses:
+        '200':
+          description: Calendar weights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitionCalendarResponse'
+  /transition/effective-rate/{sku_id}:
+    get:
+      summary: Get blended effective rate for SKU and year
+      parameters:
+        - in: path
+          name: sku_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: year
+          required: true
+          schema:
+            type: integer
+            minimum: 2026
+            maximum: 2033
+      responses:
+        '200':
+          description: Blended burden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EffectiveRateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /inventory/impact:
+    get:
+      summary: Paginated fiscal impact from materialized view
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Impact results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactResponse'
+  /inventory/risk:
+    get:
+      summary: List SKUs by transition risk score
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: min_transition_risk_score
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+        - in: query
+          name: max_transition_risk_score
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+        - in: query
+          name: ncm_code
+          schema:
+            type: string
+        - in: query
+          name: updated_after
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: sort_dir
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Risk results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskResponse'
+  /inventory/sku:
+    get:
+      summary: List inventory SKUs
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - in: query
+          name: include_inactive
+          schema:
+            type: boolean
+            default: false
+        - in: query
+          name: query
+          schema:
+            type: string
+        - in: query
+          name: sort_by
+          schema:
+            type: string
+            enum: [updated_at, sku_id]
+        - in: query
+          name: sort_order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Inventory page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryListResponse'
+  /inventory/sku/{sku_id}:
+    get:
+      summary: Get SKU by id
+      parameters:
+        - in: path
+          name: sku_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: include_inactive
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: SKU
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventorySkuResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    Page:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error_code:
+          type: string
+        message:
+          type: string
+        request_id:
+          type: string
+    TransitionCalendarResponse:
+      type: object
+      properties:
+        years:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransitionYear'
+    TransitionYear:
+      type: object
+      properties:
+        year:
+          type: integer
+        reform_weight:
+          type: number
+          format: double
+        legacy_weight:
+          type: number
+          format: double
+    EffectiveRateResponse:
+      type: object
+      properties:
+        sku_id:
+          type: string
+        year:
+          type: integer
+        blended_burden:
+          $ref: '#/components/schemas/BlendedBurden'
+    BlendedBurden:
+      type: object
+      properties:
+        legacy_component:
+          type: number
+          format: double
+        reform_component:
+          type: number
+          format: double
+        total:
+          type: number
+          format: double
+        currency:
+          type: string
+          example: BRL
+    ImpactResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImpactItem'
+        total_count:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        limit:
+          type: integer
+        has_more:
+          type: boolean
+    ImpactItem:
+      type: object
+      properties:
+        sku_id:
+          type: string
+        ncm_code:
+          type: string
+        legacy_burden:
+          type: number
+        reform_burden:
+          type: number
+        delta:
+          type: number
+        transition_risk_score:
+          type: integer
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+    RiskResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskItem'
+        total_count:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        limit:
+          type: integer
+        has_more:
+          type: boolean
+    RiskItem:
+      type: object
+      properties:
+        sku_id:
+          type: string
+        transition_risk_score:
+          type: integer
+          nullable: true
+        last_updated:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+    InventorySkuResponse:
+      type: object
+      properties:
+        sku_id:
+          type: string
+        description:
+          type: string
+        ncm_code:
+          type: string
+        origin_state:
+          type: string
+        destination_state:
+          type: string
+        legacy_taxes:
+          type: object
+          additionalProperties:
+            type: number
+        reform_taxes:
+          type: object
+          additionalProperties:
+            type: number
+        is_active:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+    InventoryListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventorySkuResponse'
+        total_count:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        limit:
+          type: integer
+        has_more:
+          type: boolean

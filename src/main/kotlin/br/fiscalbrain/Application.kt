@@ -6,9 +6,8 @@ import org.springframework.boot.runApplication
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
-class FiscalbrainApplication
+class Application
 
 fun main(args: Array<String>) {
-    runApplication<FiscalbrainApplication>(*args)
+	runApplication<Application>(*args)
 }
-

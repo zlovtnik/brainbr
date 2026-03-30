@@ -10,6 +10,7 @@
     "check": "bun --filter web check",
     "lint": "bun --filter web lint",
     "test": "bun --filter web test",
-    "test:e2e": "bun --filter web test:e2e"
+    "test:e2e": "bun --filter web test:e2e",
+    "test:e2e:ci": "bun --filter web test:e2e:ci"
   }
 }

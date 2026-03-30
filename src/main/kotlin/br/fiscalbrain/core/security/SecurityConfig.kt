@@ -22,6 +22,7 @@ import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.security.web.context.SecurityContextHolderFilter
+import br.fiscalbrain.core.tenant.TenantResolver
 
 @Configuration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -48,6 +49,7 @@ class SecurityConfig(
                 auth.requestMatchers(HttpMethod.POST, "/api/v1/audit/query").hasAuthority("SCOPE_audit:query")
                 auth.requestMatchers(HttpMethod.POST, "/api/v1/split-payment/events").hasAuthority("SCOPE_split_payment:write")
                 auth.requestMatchers(HttpMethod.GET, "/api/v1/split-payment/events").hasAuthority("SCOPE_split_payment:read")
+                auth.requestMatchers(HttpMethod.POST, "/api/v1/ingestion/jobs").hasAuthority("SCOPE_ingestion:write")
                 auth.anyRequest().authenticated()
             }
             .exceptionHandling {
@@ -62,10 +64,11 @@ class SecurityConfig(
     }
 
     @Bean
-    fun tenantContextFilter(): TenantContextFilter =
+    fun tenantContextFilter(tenantResolver: TenantResolver): TenantContextFilter =
         TenantContextFilter(
             jwtSecuritySettings = jwtSecuritySettings,
-            objectMapper = objectMapper
+            objectMapper = objectMapper,
+            tenantResolver = tenantResolver
         )
 
     @Bean

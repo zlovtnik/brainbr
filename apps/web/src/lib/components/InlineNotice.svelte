@@ -1,14 +1,37 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+
 	interface Props {
 		title: string;
 		message: string;
 		variant?: 'info' | 'success' | 'error';
+		id?: string;
+		autofocus?: boolean;
 	}
 
-	let { title, message, variant = 'info' }: Props = $props();
+	let { title, message, variant = 'info', id, autofocus = false }: Props = $props();
+	let notice = $state<HTMLElement | undefined>();
+	let liveMode = $derived(variant === 'error' ? ('assertive' as const) : ('polite' as const));
+	let role = $derived(variant === 'error' ? ('alert' as const) : ('status' as const));
+
+	$effect(() => {
+		if (!autofocus) {
+			return;
+		}
+
+		void tick().then(() => notice?.focus());
+	});
 </script>
 
-<section class={`notice notice--${variant}`} aria-live="polite">
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<section
+	bind:this={notice}
+	class={`notice notice--${variant}`}
+	{id}
+	aria-live={liveMode}
+	{role}
+	tabindex={autofocus ? -1 : undefined}
+>
 	<h2>{title}</h2>
 	<p>{message}</p>
 </section>

@@ -44,14 +44,14 @@ describe('InventoryTable', () => {
 			}
 		});
 
-		expect(screen.getByText('No inventory matched')).toBeTruthy();
+		expect(screen.getByRole('status').textContent).toContain('No inventory matched');
 
 		await rerender({
 			inventory: null,
 			loadError: 'Backend unavailable'
 		});
 
-		expect(screen.getByText('Unable to load inventory')).toBeTruthy();
+		expect(screen.getByRole('alert').textContent).toContain('Unable to load inventory');
 		expect(screen.getByText('Backend unavailable')).toBeTruthy();
 	});
 });

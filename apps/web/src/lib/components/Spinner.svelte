@@ -6,7 +6,7 @@
 	let { label = 'Loading' }: Props = $props();
 </script>
 
-<div aria-live="polite" class="spinner-wrap">
+<div aria-live="polite" class="spinner-wrap" role="status">
 	<span class="sr-only">{label}</span>
 	<span aria-hidden="true" class="spinner"></span>
 </div>

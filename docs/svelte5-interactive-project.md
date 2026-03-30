@@ -211,6 +211,9 @@ Core interaction patterns:
 - Audit accessibility and performance bottlenecks.
 - Run automated accessibility checks in CI and manual passes with VoiceOver plus one additional screen reader before release.
 - Document reusable component and feature patterns discovered during implementation.
+- Reference implementation notes:
+  - `docs/web-hardening.md`
+  - `docs/web-patterns.md`
 
 ## Definition of done for the initial frontend
 

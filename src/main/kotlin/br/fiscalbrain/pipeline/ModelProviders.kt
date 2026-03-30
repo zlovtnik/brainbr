@@ -23,6 +23,7 @@ data class AuditGenerationInput(
 
 interface EmbeddingProvider {
     fun embed(text: String): List<Double>
+    fun embedBatch(texts: List<String>): List<List<Double>> = texts.map { embed(it) }
 }
 
 interface AuditModelProvider {
@@ -47,8 +48,13 @@ class OpenAiModelProvider(
         )
         .build()
 
-    override fun embed(text: String): List<Double> {
+    override fun embed(text: String): List<Double> =
+        embedBatch(listOf(text)).first()
+
+    override fun embedBatch(texts: List<String>): List<List<Double>> {
         requireApiKey()
+        if (texts.isEmpty()) return emptyList()
+
         val response = client.post()
             .uri("/embeddings")
             .header(HttpHeaders.AUTHORIZATION, "Bearer $apiKey")
@@ -56,19 +62,22 @@ class OpenAiModelProvider(
             .body(
                 mapOf(
                     "model" to embeddingModel,
-                    "input" to text
+                    "input" to texts
                 )
             )
             .retrieve()
             .body(JsonNode::class.java)
             ?: throw IllegalStateException("Empty embedding response")
 
-        val vector = response.path("data").path(0).path("embedding")
-        if (!vector.isArray) {
-            throw IllegalStateException("Embedding response missing vector")
+        val data = response.path("data")
+        if (!data.isArray || data.size() != texts.size) {
+            throw IllegalStateException("Embedding response size mismatch (expected=${texts.size}, got=${data.size()})")
         }
-
-        return vector.map { it.asDouble() }
+        return data.map { node ->
+            val vector = node.path("embedding")
+            if (!vector.isArray) throw IllegalStateException("Embedding response missing vector")
+            vector.map { it.asDouble() }
+        }
     }
 
     override fun generateAudit(input: AuditGenerationInput): RagOutput {
@@ -151,15 +160,18 @@ class OpenAiModelProvider(
 class DeterministicModelProvider(
     @Value("\${app.models.llm:stub-llm}") private val llmModel: String
 ) : EmbeddingProvider, AuditModelProvider {
-    override fun embed(text: String): List<Double> {
-        val seed = text.hashCode().toLong()
-        val values = ArrayList<Double>(1536)
-        for (i in 0 until 1536) {
-            val value = (((seed + i * 7919) % 1000).toDouble() / 1000.0)
-            values.add(abs(value))
+    override fun embed(text: String): List<Double> = embedBatch(listOf(text)).first()
+
+    override fun embedBatch(texts: List<String>): List<List<Double>> =
+        texts.map { input ->
+            val seed = input.hashCode().toLong()
+            val values = ArrayList<Double>(1536)
+            for (i in 0 until 1536) {
+                val value = (((seed + i * 7919) % 1000).toDouble() / 1000.0)
+                values.add(abs(value))
+            }
+            values
         }
-        return values
-    }
 
     override fun generateAudit(input: AuditGenerationInput): RagOutput {
         val reformTaxes = mapOf(
