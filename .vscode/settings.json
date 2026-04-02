@@ -2,5 +2,6 @@
     "java.compile.nullAnalysis.mode": "automatic",
     "java.configuration.updateBuildConfiguration": "interactive",
     "FSharp.suggestGitignore": false,
-    "kotlin.java.home": "/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home"
+    "kotlin.java.home": "/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home",
+    "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx4G -Xms100m -Xlog:disable"
 }

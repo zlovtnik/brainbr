@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/rcs/git/brainbr/**)",
+      "Bash(gh label:*)",
+      "Bash(gh issue create --title 'Badge neutral variant is invisible — undefined CSS variables' --label critical,bug,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'Spinner track invisible — undefined --color-foreground-rgb' --label critical,bug,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'WorkspaceHeader neutral status has no background — undefined --bg-soft' --label critical,bug,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'Code sample text has no color — undefined --color-syntax' --label critical,bug,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'Base font size 14px causes iOS Safari input zoom' --label bug,accessibility --body ':*)",
+      "Bash(gh issue create --title 'EmptyState uses aria-live on static content — screen reader noise' --label bug,accessibility --body ':*)",
+      "Bash(gh issue create --title 'Inventory table: SKU cell missing scope=\"row\" for row identification' --label bug,accessibility --body ':*)",
+      "Bash(gh issue create --title 'Table \"View\" links lack row context for screen readers' --label bug,accessibility --body ':*)",
+      "Bash(gh issue create --title 'Select component missing required, hint, and disabled support' --label bug,accessibility,design-system --body ':*)",
+      "Bash(gh issue create --title 'Error page always links to /inventory regardless of context' --label bug,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'Brand name mismatch: \"FiscalBrain\" vs \"BrainBR\" and wrong theme-color' --label bug,branding --body ':*)",
+      "Bash(gh issue create --title 'Inconsistent path references: {base}/inventory vs /inventory' --label bug,branding --body ':*)",
+      "Bash(gh issue create --title 'Badge component missing danger variant' --label enhancement,design-system --body ':*)",
+      "Bash(gh issue create --title 'Four duplicate button-like patterns should consolidate into Button component' --label enhancement,design-system --body ':*)",
+      "Bash(gh issue create --title 'All shadow tokens are set to none — flat visual hierarchy' --label enhancement,design-system --body ':*)",
+      "Bash(gh issue create --title 'Mobile topbar stacks vertically creating oversized header' --label enhancement,responsive,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'No mobile navigation toggle — sidebar always visible' --label enhancement,responsive,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'Non-interactive cards have hover feedback — false affordance' --label bug,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'StatStrip silently truncates items beyond 3' --label bug,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'Pagination uses mixed element types: <a> for active, <button> for disabled' --label bug,accessibility,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'No loading skeletons — pages show spinner or blank during data fetch' --label enhancement,ui/ux --body ':*)",
+      "Bash(gh issue create --title 'No page transition animation between SvelteKit navigations' --label enhancement,ui/ux --body ':*)"
+    ]
+  }
+}

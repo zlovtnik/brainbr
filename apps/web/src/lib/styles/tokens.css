@@ -23,6 +23,9 @@
 	--danger: #f56565;
 	--danger-soft: rgba(245, 101, 101, 0.1);
 	--danger-border: rgba(245, 101, 101, 0.2);
+	--neutral: var(--text-muted);
+	--neutral-soft: rgba(200, 210, 225, 0.08);
+	--neutral-border: var(--border-strong);
 	--focus-ring: rgba(79, 142, 247, 0.35);
 	--shadow-card: none;
 	--shadow-soft: none;

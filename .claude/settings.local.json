@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp -r /Users/rcs/git/brainbr/.agents/skills/julien-blanchon-montelimar-svelte5-best-practices /Users/rcs/.claude/skills/svelte5-best-practices)",
+      "Bash(cp -r /Users/rcs/git/brainbr/.agents/skills/wshobson-agents-accessibility-compliance /Users/rcs/.claude/skills/accessibility-compliance)",
+      "Bash(mkdir -p /Users/rcs/.claude/skills)"
+    ]
+  }
+}
