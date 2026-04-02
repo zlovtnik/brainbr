@@ -22,11 +22,15 @@ export const load: PageServerLoad = async ({ fetch }) => {
 	}
 
 	try {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 3000);
 		const response = await fetch(`${apiBaseUrl}/api/v1/platform/info`, {
 			headers: {
 				accept: 'application/json'
-			}
+			},
+			signal: controller.signal
 		});
+		clearTimeout(timeoutId);
 
 		if (!response.ok) {
 			return {
@@ -41,15 +45,17 @@ export const load: PageServerLoad = async ({ fetch }) => {
 				platformError: null
 			};
 		} catch (error) {
+			console.error('Platform info JSON parse failure:', error);
 			return {
 				platformInfo: null,
-				platformError: `Platform info response could not be parsed as JSON: ${error instanceof Error ? error.message : 'Unknown parse failure'}.`
+				platformError: 'Unable to load platform information.'
 			};
 		}
 	} catch (error) {
+		console.error('Platform info fetch failure:', error);
 		return {
 			platformInfo: null,
-			platformError: `Unexpected error while fetching platform info: ${error instanceof Error ? error.message : 'Unknown error'}.`
+			platformError: 'Unexpected error loading platform information.'
 		};
 	}
 };

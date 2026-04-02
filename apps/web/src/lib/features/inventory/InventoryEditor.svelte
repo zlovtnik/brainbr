@@ -298,7 +298,6 @@
 	}
 
 	.editor-link--disabled {
-		pointer-events: none;
 		user-select: none;
 		-webkit-user-select: none;
 		-moz-user-select: none;

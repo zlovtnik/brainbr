@@ -65,7 +65,7 @@
 </script>
 
 <svelte:head>
-	<title>Sign in | FiscalBrain</title>
+	<title>Sign in | BrainBR</title>
 	<meta name="description" content="Authenticate and get to work. Your session is secured server-side." />
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
@@ -200,7 +200,7 @@
 		title="Advanced: use token"
 		subtitle="Open this only when you need a tenant-specific JWT."
 		collapsible={true}
-		defaultOpen={false}
+		defaultOpen={!!form?.error}
 	>
 		{#snippet children()}
 			<form class="stack" method="POST" action="?/token" use:withPending={'token'}>

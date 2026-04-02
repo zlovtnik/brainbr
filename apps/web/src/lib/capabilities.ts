@@ -128,7 +128,7 @@ const capabilityList: CapabilityDefinition[] = [
 			{
 				label: 'Auth',
 				value: 'Scoped',
-				detail: 'Requires `inventory:read` for reads and `inventory:write` for writes.'
+				detail: 'Requires `inventory:read` + `inventory:write` for catalog access, and `audit:trigger` for full capability.'
 			},
 			{
 				label: 'Endpoints',
