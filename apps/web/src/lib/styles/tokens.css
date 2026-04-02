@@ -44,6 +44,7 @@
 	--font-display: 'Fraunces', Georgia, serif;
 	--font-serif: var(--font-display);
 	--font-mono: 'IBM Plex Mono', 'SFMono-Regular', 'Menlo', monospace;
+	--color-foreground-rgb: 232, 234, 240;
 	--color-ink: var(--text);
 	--color-ink-muted: var(--text-muted);
 	--color-surface: var(--bg-1);
