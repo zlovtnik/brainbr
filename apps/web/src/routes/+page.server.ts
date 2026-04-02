@@ -2,5 +2,5 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	throw redirect(303, locals.session ? '/inventory' : '/auth');
+	throw redirect(303, locals.session ? '/platform' : '/auth');
 };

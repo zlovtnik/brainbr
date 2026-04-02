@@ -1,9 +1,8 @@
-const path = require('node:path');
 const { defineConfig } = require('@playwright/test');
 
 module.exports = defineConfig({
-	testDir: path.join(__dirname, 'e2e'),
-	testMatch: /.*\.e2e\.(ts|js)$/,
+	testDir: './e2e',
+	testMatch: /.*\.e2e\.(js|ts)$/,
 	fullyParallel: true,
 	retries: process.env.CI ? 1 : 0,
 	workers: process.env.CI ? 1 : undefined,

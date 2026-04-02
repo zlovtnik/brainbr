@@ -1,0 +1,11 @@
+{
+	"permissions": {
+		"allow": [
+			"Read(//Users/rcs/git/brainbr/**)",
+			"Bash(gh label:*)",
+			"Bash(gh issue:*)",
+			"Bash(gh pr:*)",
+      "Bash(gh repo:*)"
+		]
+	}
+}

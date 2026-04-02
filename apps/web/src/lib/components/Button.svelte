@@ -15,19 +15,37 @@
 		variant = 'primary',
 		type = 'button',
 		href,
+		disabled = false,
 		class: className = '',
 		...rest
 	}: Props = $props();
 
 	let classes = $derived(`button button--${variant}${className ? ` ${className}` : ''}`);
+
+	function handleAnchorClick(event: MouseEvent) {
+		if (!disabled) {
+			return;
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+	}
 </script>
 
 {#if href}
-	<a class={classes} {href} {...rest}>
+	<a
+		aria-disabled={disabled ? 'true' : undefined}
+		class={classes}
+		data-disabled={disabled ? 'true' : undefined}
+		{href}
+		onclick={handleAnchorClick}
+		tabindex={disabled ? -1 : undefined}
+		{...rest}
+	>
 		{@render children()}
 	</a>
 {:else}
-	<button class={classes} {type} {...rest}>
+	<button class={classes} {disabled} {type} {...rest}>
 		{@render children()}
 	</button>
 {/if}
@@ -39,44 +57,82 @@
 		justify-content: center;
 		gap: var(--space-2);
 		min-height: 2.75rem;
-		padding: 0.8rem 1.15rem;
-		border-radius: 999px;
-		border: 1px solid transparent;
-		font-weight: 700;
+		padding: 0.38rem 0.85rem;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--border);
+		font-weight: 500;
+		font-size: 0.86rem;
 		text-decoration: none;
 		cursor: pointer;
+		background: var(--bg-2);
+		color: var(--text-muted);
 	}
 
 	.button:hover {
-		transform: translateY(-1px);
+		transform: none;
+		background: var(--bg-3);
+		border-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	.button:is([aria-disabled='true'], :disabled) {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.button:is([aria-disabled='true'], :disabled):hover {
+		transform: none;
+		box-shadow: none;
 	}
 
 	.button--primary {
-		background: linear-gradient(135deg, var(--color-accent) 0%, #15865a 100%);
-		color: white;
-		box-shadow: var(--shadow-soft);
+		background: rgba(79, 142, 247, 0.18);
+		color: #8bb5ff;
+		border-color: var(--accent-border);
+	}
+
+	.button--primary:hover {
+		background: rgba(122, 177, 255, 0.28);
+		color: #d1e5ff;
+		border-color: var(--color-accent-vivid);
+	}
+
+	.button--primary[aria-disabled='true']:hover {
+		background: rgba(79, 142, 247, 0.18);
+		color: #8bb5ff;
+		border-color: var(--accent-border);
 	}
 
 	.button--secondary {
-		background: rgba(255, 255, 255, 0.72);
-		color: var(--color-ink);
-		border-color: var(--color-border-strong);
+		background: var(--bg-2);
+		color: var(--text);
 	}
 
 	.button--ghost {
 		background: transparent;
-		color: var(--color-accent-strong);
-		border-color: var(--color-border);
+		color: var(--text-muted);
+		border-color: var(--border);
 	}
 
-	.button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-		transform: none;
+	.button--secondary[aria-disabled='true']:hover {
+		background: var(--bg-2);
+		color: var(--text);
+		border-color: var(--border);
 	}
 
-	.button:disabled:hover {
-		transform: none;
-		box-shadow: none;
+	.button--ghost[aria-disabled='true']:hover {
+		background: transparent;
+		color: var(--text-muted);
+		border-color: var(--border);
+	}
+
+	.button:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--color-focus-ring);
+	}
+
+	.button--secondary:focus-visible,
+	.button--ghost:focus-visible {
+		box-shadow: 0 0 0 3px var(--color-focus-ring);
 	}
 </style>

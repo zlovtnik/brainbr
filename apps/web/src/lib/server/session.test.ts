@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+	consumeFlash,
 	createSessionSummary,
 	isLikelyJwt,
 	readSession,
+	writeFlash,
 	writeSession,
 	type AuthSession
 } from '$lib/server/session';
@@ -75,5 +77,20 @@ describe('session helpers', () => {
 	it('recognizes basic JWT structure', () => {
 		expect(isLikelyJwt(createToken({ sub: 'demo-user' }))).toBe(true);
 		expect(isLikelyJwt('not-a-token')).toBe(false);
+	});
+
+	it('consumes flash messages only once', () => {
+		const cookies = new MockCookies();
+
+		writeFlash(cookies as never, {
+			type: 'success',
+			message: 'SKU updated successfully.'
+		});
+
+		expect(consumeFlash(cookies as never)).toEqual({
+			type: 'success',
+			message: 'SKU updated successfully.'
+		});
+		expect(consumeFlash(cookies as never)).toBeNull();
 	});
 });

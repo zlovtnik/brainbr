@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     id("org.springframework.boot") version "3.4.4"
     id("io.spring.dependency-management") version "1.1.7"
+    id("jacoco")
     kotlin("jvm") version "2.1.20"
     kotlin("plugin.spring") version "2.1.20"
 }
@@ -57,10 +58,63 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+val coverageIncludes = listOf(
+    "br/fiscalbrain/audit/**",
+    "br/fiscalbrain/pipeline/**",
+    "br/fiscalbrain/inventory/**",
+    "br/fiscalbrain/transition/**",
+    "br/fiscalbrain/splitpayment/**"
+)
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    classDirectories.setFrom(
+        files(classDirectories.files.map { directory ->
+            fileTree(directory) {
+                include(coverageIncludes)
+            }
+        })
+    )
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+    classDirectories.setFrom(
+        files(classDirectories.files.map { directory ->
+            fileTree(directory) {
+                include(coverageIncludes)
+            }
+        })
+    )
+    violationRules {
+        rule {
+            element = "BUNDLE"
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+    }
 }
 
 tasks.withType<KotlinCompile> {
     compilerOptions {
         freeCompilerArgs.add("-Xjsr305=strict")
     }
+}
+
+tasks.named("check") {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }

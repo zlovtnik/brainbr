@@ -4,10 +4,16 @@ import type { Cookies } from '@sveltejs/kit';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const SESSION_COOKIE_NAME = 'brainbr_session';
+export const FLASH_COOKIE_NAME = 'brainbr_flash';
 
 interface SessionEnvelope {
 	token: string;
 	issuedAt: string;
+}
+
+export interface FlashMessage {
+	type: 'success' | 'error' | 'info';
+	message: string;
 }
 
 export interface SessionSummary {
@@ -90,12 +96,12 @@ function toAuthSession(envelope: SessionEnvelope): AuthSession {
 	};
 }
 
-function seal(envelope: SessionEnvelope): string {
-	const serialized = toBase64Url(JSON.stringify(envelope));
+function sealValue(value: unknown): string {
+	const serialized = toBase64Url(JSON.stringify(value));
 	return `${serialized}.${sign(serialized)}`;
 }
 
-function unseal(cookie: string): SessionEnvelope {
+function unsealValue<T>(cookie: string): T {
 	const [serialized, providedSignature] = cookie.split('.');
 	if (!serialized || !providedSignature) {
 		throw new Error('Invalid session cookie format');
@@ -111,7 +117,7 @@ function unseal(cookie: string): SessionEnvelope {
 		throw new Error('Invalid session cookie signature');
 	}
 
-	return JSON.parse(fromBase64Url(serialized)) as SessionEnvelope;
+	return JSON.parse(fromBase64Url(serialized)) as T;
 }
 
 export function createSessionSummary(token: string): SessionSummary {
@@ -140,7 +146,7 @@ export function writeSession(cookies: Cookies, token: string): AuthSession {
 	};
 	const session = toAuthSession(envelope);
 
-	cookies.set(SESSION_COOKIE_NAME, seal(envelope), {
+	cookies.set(SESSION_COOKIE_NAME, sealValue(envelope), {
 		httpOnly: true,
 		path: '/',
 		sameSite: 'lax',
@@ -161,15 +167,57 @@ export function readSession(cookies: Cookies): SessionReadResult {
 		return {
 			valid: true,
 			invalid: false,
-			data: toAuthSession(unseal(cookie))
+			data: toAuthSession(unsealValue<SessionEnvelope>(cookie))
 		};
 	} catch {
 		return { valid: false, invalid: true };
 	}
 }
 
+export function writeFlash(cookies: Cookies, flash: FlashMessage): void {
+	cookies.set(FLASH_COOKIE_NAME, sealValue(flash), {
+		httpOnly: true,
+		path: '/',
+		sameSite: 'lax',
+		secure: !dev,
+		maxAge: 60
+	});
+}
+
+export function consumeFlash(cookies: Cookies): FlashMessage | null {
+	const cookie = cookies.get(FLASH_COOKIE_NAME);
+	if (!cookie) {
+		return null;
+	}
+
+	cookies.delete(FLASH_COOKIE_NAME, {
+		path: '/'
+	});
+
+	try {
+		const unsealed = unsealValue<FlashMessage>(cookie);
+		// Runtime validation: ensure unsealed value matches FlashMessage shape
+		if (
+			unsealed &&
+			typeof unsealed === 'object' &&
+			'type' in unsealed &&
+			'message' in unsealed &&
+			typeof unsealed.message === 'string' &&
+			['success', 'error', 'info'].includes(unsealed.type)
+		) {
+			return unsealed as FlashMessage;
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
 export function clearSession(cookies: Cookies): void {
 	cookies.delete(SESSION_COOKIE_NAME, {
+		path: '/'
+	});
+	cookies.delete(FLASH_COOKIE_NAME, {
 		path: '/'
 	});
 }

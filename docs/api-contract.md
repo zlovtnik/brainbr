@@ -28,9 +28,13 @@ X-Request-Id: 88f41524-c1e5-4220-9f71-f7d6ce7fdd58
 - Recommended scope mapping:
   - `inventory:write` for `POST /inventory/sku`, `PUT /inventory/sku/{sku_id}`, and `DELETE /inventory/sku/{sku_id}`.
   - `inventory:read` for `GET /inventory/sku` and `GET /inventory/sku/{sku_id}`.
-  - `audit:trigger` for `POST /inventory/sku/{sku_id}/re-audit` (Phase 2).
-  - `audit:read` for `GET /audit/explain/{sku_id}` and `GET /audit/law/{law_ref}`.
+  - `audit:trigger` for `POST /inventory/sku/{sku_id}/re-audit`.
+  - `audit:read` for `GET /audit/explain/{sku_id}`.
   - `audit:query` for `POST /audit/query`.
+  - `compliance:read` for explainability artifact retrieval endpoints.
+  - `ingestion:write` for `POST /ingestion/jobs`.
+  - `split_payment:write` for `POST /split-payment/events`.
+  - `split_payment:read` for `GET /split-payment/events`.
 
 Forbidden response shape (HTTP `403`):
 
@@ -230,7 +234,23 @@ Response (`200`):
 }
 ```
 
-Phase 1 note: `POST /inventory/sku/{sku_id}/re-audit` is deferred to Phase 2.
+### `POST /inventory/sku/{sku_id}/re-audit`
+
+Queues a new audit job for an existing tenant-scoped SKU.
+
+Response (`200`):
+
+```json
+{
+  "job_id": "8e2f9c17-7e64-49d2-8f82-6b5bb5e5ec51",
+  "status": "queued"
+}
+```
+
+Expected status codes:
+
+- `200 OK`
+- `404 Not Found`
 
 ### `GET /inventory/impact`
 
@@ -357,39 +377,6 @@ Expected status codes:
 - `404 Not Found`
 - `500 Internal Server Error`
 
-### `GET /audit/law/{law_ref}`
-
-Returns legal paragraph by reference (tenant override aware).
-
-Tenant override behavior:
-
-1. Attempt tenant-specific override lookup for current tenant and `law_ref`.
-2. If no override exists, fall back to global/base law row.
-3. Response field `override_source` identifies selected source (`tenant_override` or `global_default`).
-4. If both candidates exist, tenant override always wins.
-
-Response example (`200`):
-
-```json
-{
-  "id": "22d2e90f-b037-48c7-af2f-df63a1577d2f",
-  "ref": "LC-68-2024-art-12",
-  "title": "Artigo 12 - CBS",
-  "content": "Texto consolidado aplicado na auditoria.",
-  "tenant_id": "00000000-0000-0000-0000-000000000001",
-  "source": "planalto",
-  "effective_at": "2027-01-01",
-  "override_source": "tenant_override"
-}
-```
-
-Expected status codes:
-
-- `200 OK`
-- `400 Bad Request`
-- `404 Not Found`
-- `500 Internal Server Error`
-
 ### `POST /audit/query`
 
 Semantic query over law base with top-K retrieval.
@@ -436,8 +423,133 @@ Expected status codes:
 
 - `200 OK`: query executed successfully.
 - `400 Bad Request`: invalid input body.
-- `422 Unprocessable Entity`: `k` out of range.
 - `500 Internal Server Error`: unexpected server failure.
+
+### `GET /audit/explain/{sku_id}/artifact/latest`
+
+Returns the latest persisted explainability artifact for a SKU.
+
+Response example (`200`):
+
+```json
+{
+  "run_id": "7abf6a7d-f030-4b16-9f9f-5e2d62e3a2f1",
+  "sku_id": "SKU-001",
+  "job_id": "8e2f9c17-7e64-49d2-8f82-6b5bb5e5ec51",
+  "request_id": "88f41524-c1e5-4220-9f71-f7d6ce7fdd58",
+  "artifact_version": "1.0.0",
+  "schema_version": "explainability-artifact-v1",
+  "artifact_digest": "sha256:...",
+  "llm_model_used": "gpt-4o",
+  "vector_id": "7c4d5d32-b8ab-4dd7-9c31-51d5d8a5b3f1",
+  "audit_confidence": 0.93,
+  "source": {
+    "law_ref": "LC-68-2024-art-12",
+    "content": "Texto legal relevante para o SKU...",
+    "source_url": "https://www.planalto.gov.br/..."
+  },
+  "replay_context": {},
+  "rag_output": {},
+  "created_at": "2026-03-25T15:10:00Z"
+}
+```
+
+### `GET /audit/explain/artifact/runs/{run_id}`
+
+Returns a persisted explainability artifact by run identifier.
+
+Expected status codes for both artifact endpoints:
+
+- `200 OK`
+- `404 Not Found`
+- `500 Internal Server Error`
+
+## Ingestion
+
+### `POST /ingestion/jobs`
+
+Queues a legal text ingestion job for asynchronous processing.
+
+Request example:
+
+```json
+{
+  "law_ref": "LC-123-2025",
+  "law_type": "complementary_law",
+  "source_url": "https://example.com/law",
+  "published_at": "2025-01-15",
+  "effective_at": "2026-01-01",
+  "tags": ["beverages", "cbs"]
+}
+```
+
+Rules:
+
+- Exactly one of `source_url` or `raw_content` must be provided.
+- Tenant scope is resolved from the authenticated JWT, never from the request body.
+
+Response (`202`):
+
+```json
+{
+  "job_id": "8e2f9c17-7e64-49d2-8f82-6b5bb5e5ec51",
+  "status": "queued"
+}
+```
+
+Expected status codes:
+
+- `202 Accepted`
+- `400 Bad Request`
+- `401 Unauthorized`
+- `403 Forbidden`
+
+## Split Payment
+
+### `POST /split-payment/events`
+
+Creates or deduplicates a tenant-scoped split-payment integration event.
+
+Request example:
+
+```json
+{
+  "sku_id": "SKU-001",
+  "event_type": "authorization.created",
+  "amount": 1099,
+  "currency": "BRL",
+  "idempotency_key": "evt-20260325-0001",
+  "timestamp": "2026-03-25T15:10:00Z",
+  "integration_metadata": {
+    "provider": "psp-x"
+  },
+  "event_payload": {
+    "status": "authorized"
+  }
+}
+```
+
+Response (`200`):
+
+```json
+{
+  "event_id": "a6f43de4-bdc1-4fd3-a8b8-976e1f2f27f5",
+  "status": "created",
+  "integration_status": "pending",
+  "created_at": "2026-03-25T15:10:00Z"
+}
+```
+
+### `GET /split-payment/events`
+
+Lists tenant-scoped split-payment events with pagination and optional `sku_id` / `event_type` filtering.
+
+Expected status codes:
+
+- `200 OK`
+- `400 Bad Request`
+- `401 Unauthorized`
+- `403 Forbidden`
 
 ## Transition
 
@@ -523,6 +635,22 @@ Expected status codes:
 - `200 OK`: successful response with blended burden.
 - `400 Bad Request`: invalid year parameter.
 - `404 Not Found`: `sku_id` not found.
+
+## Platform
+
+### `GET /platform/info`
+
+Public endpoint returning runtime platform metadata.
+
+Response example (`200`):
+
+```json
+{
+  "service": "fiscalbrain-br",
+  "embeddingModel": "text-embedding-3-small",
+  "llmModel": "gpt-4o"
+}
+```
 
 ## Error model
 

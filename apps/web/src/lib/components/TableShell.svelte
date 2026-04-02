@@ -20,30 +20,42 @@
 	.table-shell {
 		overflow-x: auto;
 		border-radius: var(--radius-md);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--border);
+		background: var(--bg-2);
+		background-color: var(--bg-2) !important;
+		background-image: none !important;
 	}
 
 	table {
 		width: 100%;
 		border-collapse: collapse;
+		background: var(--bg-2);
+		background-color: var(--bg-2) !important;
 	}
 
 	caption {
 		text-align: left;
 		padding: var(--space-4);
-		font-weight: 700;
-		background: rgba(16, 49, 30, 0.03);
+		font-weight: 500;
+		font-family: var(--font-mono);
+		color: var(--text-faint);
+		background: var(--bg-3);
+		background-color: var(--bg-3) !important;
 	}
 
-	:global(th),
-	:global(td) {
+	:global(.table-shell th),
+	:global(.table-shell td) {
 		padding: 1rem;
 		text-align: left;
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--border);
+		background: var(--bg-2);
+		background-color: var(--bg-2) !important;
+		color: var(--text);
 	}
 
-	:global(th) {
-		font-size: 0.9rem;
-		color: var(--color-ink-muted);
+	:global(.table-shell th) {
+		font-size: 0.82rem;
+		font-family: var(--font-mono);
+		color: var(--text-faint);
 	}
 </style>

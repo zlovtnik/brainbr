@@ -10,8 +10,19 @@ test.beforeEach(async ({ request }) => {
 	await resetMockApi(request);
 });
 
+test('auth keeps the token bootstrap flow collapsed until advanced users open it', async ({
+	page
+}) => {
+	await page.goto('/auth');
+
+	await expect(page.locator('details')).not.toHaveAttribute('open', '');
+	await page.getByText('Advanced: use token').click();
+	await expect(page.locator('details')).toHaveAttribute('open', '');
+});
+
 test('auth bootstrap rejects invalid JWT input and keeps focus on the field', async ({ page }) => {
 	await page.goto('/auth');
+	await page.getByText('Advanced: use token').click();
 	await page.getByLabel('Bearer JWT').fill('not-a-token');
 	await page.getByRole('button', { name: 'Start authenticated session' }).click();
 
@@ -31,11 +42,9 @@ test('auth bootstrap stores session, moves focus to main content, and passes axe
 		scope: 'inventory:read inventory:write'
 	});
 
-	await expect(page.getByText('inventory-operator')).toBeVisible();
+	await expect(page.getByText('inventory-operator', { exact: true })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Platform', exact: true })).toBeVisible();
 	await expectMainContentFocus(page);
-
-	await page.keyboard.press('Tab');
-	await expect(page.getByLabel('Search')).toBeFocused();
 
 	await expectNoAxeViolations(page);
 });

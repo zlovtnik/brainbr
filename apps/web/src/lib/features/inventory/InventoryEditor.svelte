@@ -4,6 +4,7 @@
 	import Card from '$lib/components/Card.svelte';
 	import InlineNotice from '$lib/components/InlineNotice.svelte';
 	import Input from '$lib/components/Input.svelte';
+	import Spinner from '$lib/components/Spinner.svelte';
 	import type { InventoryFormErrors, InventoryFormValues } from '$lib/features/inventory/types';
 
 	interface FieldErrorLink {
@@ -49,6 +50,7 @@
 		formError?: string;
 		isEdit?: boolean;
 		cancelHref: string;
+		submitting?: boolean;
 	}
 
 	let {
@@ -59,7 +61,8 @@
 		errors = {},
 		formError,
 		isEdit = false,
-		cancelHref
+		cancelHref,
+		submitting = false
 	}: Props = $props();
 
 	let fieldErrors = $derived(collectFieldErrors(errors));
@@ -221,10 +224,21 @@
 		</section>
 
 		<div class="cluster">
-			<Button type="submit">
-				{#snippet children()}{submitLabel}{/snippet}
+			<Button disabled={submitting} type="submit">
+				{#snippet children()}
+					{#if submitting}
+						<Spinner label="Saving inventory" />
+						Saving…
+					{:else}
+						{submitLabel}
+					{/if}
+				{/snippet}
 			</Button>
-			<a class="editor-link" href={cancelHref}>Cancel</a>
+			{#if submitting}
+				<span class="editor-link editor-link--disabled">Cancel</span>
+			{:else}
+				<a class="editor-link" href={cancelHref}>Cancel</a>
+			{/if}
 		</div>
 	</Card>
 </div>
@@ -246,8 +260,8 @@
 		gap: var(--space-3);
 		padding: var(--space-4);
 		border-radius: var(--radius-md);
-		border: 1px solid var(--color-error-border);
-		background: rgba(255, 245, 242, 0.95);
+		border: 1px solid var(--danger-border);
+		background: var(--danger-soft);
 	}
 
 	.error-summary h2,
@@ -275,11 +289,20 @@
 		justify-content: center;
 		min-height: 2.75rem;
 		padding: 0.8rem 1.15rem;
-		border-radius: 999px;
-		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--border);
 		text-decoration: none;
-		font-weight: 700;
-		color: var(--color-accent-strong);
-		background: rgba(255, 255, 255, 0.7);
+		font-weight: 500;
+		color: var(--text-muted);
+		background: var(--bg-2);
+	}
+
+	.editor-link--disabled {
+		pointer-events: none;
+		user-select: none;
+		-webkit-user-select: none;
+		-moz-user-select: none;
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

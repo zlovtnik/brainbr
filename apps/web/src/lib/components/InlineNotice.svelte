@@ -32,7 +32,7 @@
 	{role}
 	tabindex={autofocus ? -1 : undefined}
 >
-	<h2>{title}</h2>
+	<p class="notice__title"><strong>{title}</strong></p>
 	<p>{message}</p>
 </section>
 
@@ -40,32 +40,38 @@
 	.notice {
 		display: grid;
 		gap: var(--space-2);
-		padding: 1rem 1.1rem;
+		padding: 0.9rem 1rem;
 		border-radius: var(--radius-md);
 		border: 1px solid transparent;
 	}
 
-	.notice h2,
+	.notice__title,
 	.notice p {
 		margin: 0;
 	}
 
-	.notice h2 {
-		font-size: 1rem;
+	.notice__title {
+		font-size: 0.76rem;
+		font-family: var(--font-mono);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 	}
 
 	.notice--info {
-		background: var(--color-accent-soft);
-		border-color: var(--color-info-border);
+		background: var(--accent-soft);
+		border-color: var(--accent-border);
+		color: var(--text);
 	}
 
 	.notice--success {
-		background: var(--color-success-soft);
-		border-color: var(--color-success-border);
+		background: var(--success-soft);
+		border-color: var(--success-border);
+		color: var(--text);
 	}
 
 	.notice--error {
-		background: var(--color-danger-soft);
-		border-color: var(--color-error-border);
+		background: var(--danger-soft);
+		border-color: var(--danger-border);
+		color: var(--text);
 	}
 </style>

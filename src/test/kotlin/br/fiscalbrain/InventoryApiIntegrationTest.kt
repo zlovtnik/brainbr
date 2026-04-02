@@ -57,28 +57,31 @@ class InventoryApiIntegrationTest {
 
     @BeforeEach
     fun setUp() {
-        jdbcTemplate.execute("DELETE FROM fiscal_audit_log")
-        jdbcTemplate.execute("DELETE FROM split_payment_events")
-        jdbcTemplate.execute("DELETE FROM audit_explainability_run")
+        jdbcTemplate.execute(
+            """
+            TRUNCATE TABLE
+                split_payment_event_statuses,
+                split_payment_events,
+                fiscal_audit_log,
+                audit_explainability_run
+            RESTART IDENTITY CASCADE
+            """.trimIndent()
+        )
         jdbcTemplate.execute("DELETE FROM inventory_transition")
         jdbcTemplate.execute("DELETE FROM fiscal_knowledge_chunk")
         jdbcTemplate.execute("DELETE FROM fiscal_knowledge_base")
         jdbcTemplate.execute("DELETE FROM companies")
         jdbcTemplate.update(
-            "INSERT INTO companies (id, name, cnpj, plan, is_active) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO companies (id, external_tenant_id, name) VALUES (?, ?, ?)",
             UUID.fromString(TENANT_A),
-            "Tenant A",
-            "11111111000101",
-            "starter",
-            true
+            "tenant-a",
+            "Tenant A"
         )
         jdbcTemplate.update(
-            "INSERT INTO companies (id, name, cnpj, plan, is_active) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO companies (id, external_tenant_id, name) VALUES (?, ?, ?)",
             UUID.fromString(TENANT_B),
-            "Tenant B",
-            "11111111000102",
-            "starter",
-            true
+            "tenant-b",
+            "Tenant B"
         )
 
         given(jwtDecoder.decode(anyString())).willAnswer { invocation ->
@@ -340,7 +343,7 @@ class InventoryApiIntegrationTest {
             skuId = "SKU-ART",
             vectorId = chunkId
         )
-        seedExplainabilityRun(
+        val runId = seedExplainabilityRun(
             tenantId = TENANT_A,
             skuId = "SKU-ART",
             chunkId = chunkId
@@ -351,10 +354,18 @@ class InventoryApiIntegrationTest {
                 .header("Authorization", "Bearer tenant-a-compliance-read")
         )
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.run_id").value(runId.toString()))
             .andExpect(jsonPath("$.sku_id").value("SKU-ART"))
             .andExpect(jsonPath("$.artifact_version").value("explainability-artifact-v1"))
+            .andExpect(jsonPath("$.schema_version").value("1.0.0"))
+            .andExpect(jsonPath("$.artifact_digest").value(matchesPattern("^[a-f0-9]{64}$")))
+            .andExpect(jsonPath("$.vector_id").value(chunkId.toString()))
+            .andExpect(jsonPath("$.replay_context.selected_chunk_id").value(chunkId.toString()))
+            .andExpect(jsonPath("$.replay_context.top_k").value(5))
             .andExpect(jsonPath("$.source.law_ref").value("LC-68-2024-art-12"))
+            .andExpect(jsonPath("$.source.source_url").value("https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp68.htm"))
             .andExpect(jsonPath("$.rag_output.reform_taxes.tax_rate").value(26.3))
+            .andExpect(jsonPath("$.rag_output.audit_confidence").value(0.93))
 
         mockMvc.perform(
             get("/api/v1/audit/explain/SKU-ART/artifact/latest")
@@ -456,6 +467,13 @@ class InventoryApiIntegrationTest {
             .andExpect(jsonPath("$.items[0].idempotency_key").value("idem-001"))
             .andExpect(jsonPath("$.items[0].amount").value(15045))
             .andExpect(jsonPath("$.items[0].timestamp").exists())
+
+        mockMvc.perform(
+            get("/api/v1/split-payment/events")
+                .header("Authorization", "Bearer tenant-b-split-read")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.total_count").value(0))
     }
 
     @Test
@@ -504,6 +522,41 @@ class InventoryApiIntegrationTest {
             "explainability-artifact-v1",
             "d".repeat(64)
         )
+        val splitEventId = UUID.randomUUID()
+        jdbcTemplate.update(
+            """
+            INSERT INTO split_payment_events (
+                id, company_id, sku_id, event_type, amount, currency, idempotency_key, event_timestamp,
+                integration_status, integration_metadata, event_payload, request_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?)
+            """.trimIndent(),
+            splitEventId,
+            UUID.fromString(TENANT_A),
+            "SKU-IMM",
+            "settlement_requested",
+            15045L,
+            "BRL",
+            "idem-immut",
+            Instant.parse("2026-03-25T21:00:00Z"),
+            "queued",
+            """{"provider":"internal"}""",
+            """{"order_ref":"ORDER-IMM"}""",
+            "req-imm"
+        )
+        val splitStatusId = UUID.randomUUID()
+        jdbcTemplate.update(
+            """
+            INSERT INTO split_payment_event_statuses (
+                id, event_id, company_id, status, status_metadata, request_id
+            ) VALUES (?, ?, ?, ?, ?::jsonb, ?)
+            """.trimIndent(),
+            splitStatusId,
+            splitEventId,
+            UUID.fromString(TENANT_A),
+            "queued",
+            """{"provider":"internal"}""",
+            "req-imm"
+        )
 
         assertThrows<Exception> {
             jdbcTemplate.execute("UPDATE fiscal_audit_log SET event_type = 'MUTATED'")
@@ -516,6 +569,18 @@ class InventoryApiIntegrationTest {
         }
         assertThrows<Exception> {
             jdbcTemplate.execute("DELETE FROM audit_explainability_run")
+        }
+        assertThrows<Exception> {
+            jdbcTemplate.execute("UPDATE split_payment_events SET integration_status = 'processed'")
+        }
+        assertThrows<Exception> {
+            jdbcTemplate.execute("DELETE FROM split_payment_events")
+        }
+        assertThrows<Exception> {
+            jdbcTemplate.execute("UPDATE split_payment_event_statuses SET status = 'processed'")
+        }
+        assertThrows<Exception> {
+            jdbcTemplate.execute("DELETE FROM split_payment_event_statuses")
         }
     }
 
@@ -602,6 +667,11 @@ class InventoryApiIntegrationTest {
                 "scope" to "split_payment:read",
                 "tenant_id" to TENANT_A
             )
+            "tenant-b-split-read" -> mutableMapOf(
+                "sub" to "split-b",
+                "scope" to "split_payment:read",
+                "tenant_id" to TENANT_B
+            )
             "missing-tenant" -> mutableMapOf(
                 "sub" to "user-a",
                 "scope" to "inventory:read inventory:write"
@@ -635,6 +705,7 @@ class InventoryApiIntegrationTest {
             registry.add("spring.datasource.url", postgres::getJdbcUrl)
             registry.add("spring.datasource.username", postgres::getUsername)
             registry.add("spring.datasource.password", postgres::getPassword)
+            registry.add("spring.flyway.url", postgres::getJdbcUrl)
             registry.add("spring.flyway.user", postgres::getUsername)
             registry.add("spring.flyway.password", postgres::getPassword)
             registry.add("app.providers.mode") { "stub" }

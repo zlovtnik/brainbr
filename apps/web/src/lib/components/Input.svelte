@@ -25,15 +25,14 @@
 		readonly = false
 	}: Props = $props();
 
-	let labelId = $derived(`${id}-label`);
 	let errorId = $derived(error ? `${id}-error` : undefined);
 	let describedBy = $derived(
 		[hint ? `${id}-hint` : null, errorId].filter(Boolean).join(' ') || undefined
 	);
 </script>
 
-<label class="field">
-	<span class="field__label" id={labelId}>{label}</span>
+<div class="field">
+	<label class="field__label" for={id}>{label}</label>
 	{#if hint}
 		<span class="field__hint" id={`${id}-hint`}>{hint}</span>
 	{/if}
@@ -47,7 +46,6 @@
 		{placeholder}
 		{readonly}
 		{required}
-		aria-labelledby={labelId}
 		aria-invalid={Boolean(error)}
 		aria-describedby={describedBy}
 		aria-errormessage={errorId}
@@ -55,7 +53,7 @@
 	{#if error}
 		<span class="field__error" id={errorId}>{error}</span>
 	{/if}
-</label>
+</div>
 
 <style>
 	.field {
@@ -64,7 +62,8 @@
 	}
 
 	.field__label {
-		font-weight: 700;
+		font-weight: 500;
+		color: var(--text);
 	}
 
 	.field__hint,
@@ -73,7 +72,7 @@
 	}
 
 	.field__hint {
-		color: var(--color-ink-muted);
+		color: var(--text-faint);
 	}
 
 	.field__error {
@@ -84,14 +83,16 @@
 		width: 100%;
 		min-height: 3rem;
 		padding: 0.85rem 1rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.84);
-		color: var(--color-ink);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-2);
+		background-color: var(--bg-2) !important;
+		background-image: none !important;
+		color: var(--text);
 	}
 
 	.field__input--error {
-		border-color: rgba(178, 59, 47, 0.55);
-		background: rgba(255, 245, 242, 0.9);
+		border-color: var(--danger-border);
+		background: var(--danger-soft);
 	}
 </style>

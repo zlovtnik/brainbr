@@ -1,12 +1,27 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
 	import '$lib/styles/app.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import {
+		capabilityList,
+		getCapabilityAvailability,
+		getCapabilityByPath,
+		getCapabilitySummary
+	} from '$lib/capabilities';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
-	let authenticated = $derived(Boolean(data.session?.authenticated));
 	let mainContent: HTMLElement | undefined;
+	let authenticated = $derived(Boolean(data.session?.authenticated));
+	let activeCapability = $derived(getCapabilityByPath(page.url.pathname));
+	let capabilitySummary = $derived(getCapabilitySummary(data.session));
+	let capabilityNav = $derived(
+		capabilityList.map((capability) => ({
+			...capability,
+			availability: getCapabilityAvailability(capability, data.session?.scopes ?? [])
+		}))
+	);
 
 	afterNavigate(({ from }) => {
 		if (!from) {
@@ -15,138 +30,647 @@
 
 		mainContent?.focus();
 	});
+
+	let sessionLabel = $derived(
+		data.session?.user && data.session?.tenantId
+			? `${data.session.user} · ${data.session.tenantId}`
+			: data.session?.user
+				? data.session.user
+				: 'Guest'
+	);
+	let homeHref = $derived(authenticated ? '/inventory' : '/auth');
+	const capabilityIcons = {
+		platform: '◈',
+		inventory: '◫',
+		audit: '◪',
+		compliance: '◧',
+		'split-payment': '◰',
+		ingestion: '◱'
+	} as const;
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>BrainBR Inventory Console</title>
+	<title>BrainBR Fiscal Console</title>
 </svelte:head>
 
-<a class="skip-link" href="#main-content">Skip to content</a>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
-<div class="page-shell">
-	<header class="shell-header">
-		<div class="shell-header__brand">
-			<p class="eyebrow">BrainBR</p>
-			<p class="shell-header__title">Inventory transition workspace</p>
+<div class="page-shell shell">
+	<header class="shell__topbar">
+		<div class="shell__topbar-left">
+			<a aria-label={authenticated ? 'BrainBR, go to inventory' : 'BrainBR, go to sign in'} class="shell__brand" href={homeHref}>
+				<div class="shell__brand-dot"></div>
+				<span>BrainBR</span>
+			</a>
+			<div class="shell__divider"></div>
+			<div class="shell__breadcrumb" aria-label="Breadcrumb">
+				<span>operations</span>
+				<span>/</span>
+				<span class="shell__breadcrumb-active"
+					>{activeCapability?.navLabel?.toLowerCase() ?? 'auth'}</span
+				>
+			</div>
 		</div>
 
-		<nav aria-label="Primary navigation" class="shell-nav">
-			<a class="shell-link" href={authenticated ? '/inventory' : '/auth'}>
-				{authenticated ? 'Inventory' : 'Auth bootstrap'}
-			</a>
+		<div class="shell__actions">
+			<div class="shell__session-chip">
+				<div class:shell__session-dot--inactive={!authenticated} class="shell__session-dot"></div>
+				{sessionLabel}
+			</div>
 			{#if authenticated}
 				<form action="/auth/logout" method="POST">
-					<button class="shell-link shell-link--button" type="submit">Sign out</button>
+					<button class="shell__action-button" type="submit">Sign out</button>
 				</form>
+			{:else}
+				<a class="shell__action-button" href="/auth">Sign in</a>
 			{/if}
-		</nav>
+		</div>
 	</header>
 
-	<div aria-live="polite" class="sr-only">
-		{#if data.session}
-			Authenticated as {data.session.user}
-		{:else}
-			Authentication required
-		{/if}
-	</div>
+	<div class="shell__layout">
+		<aside class="shell__sidebar">
+			<div class="shell__sidebar-label">Capabilities</div>
+			<nav aria-label="Backend capabilities" class="cap-nav">
+				{#each capabilityNav as capability}
+					<a
+						aria-current={activeCapability?.id === capability.id ? 'page' : undefined}
+						class:cap-nav__link--active={activeCapability?.id === capability.id}
+						class:cap-nav__link--partial={capability.availability === 'partial'}
+						class:cap-nav__link--locked={capability.availability === 'locked'}
+						class="cap-nav__link"
+						href={capability.href}
+					>
+						<span class="cap-nav__title-row">
+							<span class="cap-nav__title-wrap">
+								<span class="cap-nav__icon" aria-hidden="true"
+									>{capabilityIcons[capability.id]}</span
+								>
+								<span class="cap-nav__title">{capability.navLabel}</span>
+							</span>
+							<span class={`cap-nav__badge cap-nav__badge--${capability.availability}`}>
+								{capability.availability === 'public' || capability.availability === 'available'
+									? 'live'
+									: capability.availability}
+							</span>
+						</span>
+					</a>
+				{/each}
+			</nav>
+		</aside>
 
-	{#if data.session}
-		<section class="session-strip" aria-label="Current session">
-			<p><strong>User:</strong> {data.session.user}</p>
-			<p><strong>Tenant:</strong> {data.session.tenantId ?? 'Not present in token'}</p>
-			<p><strong>Scopes:</strong> {data.session.scopes?.join(', ') || 'None detected'}</p>
+		<div class="shell__content">
+			<main bind:this={mainContent} id="main-content" tabindex="-1">
+				<div class="shell__viewport">
+					{@render children()}
+				</div>
+			</main>
+
+			<footer class="shell__footer">
+				<div class="shell__footer-inner">
+					<p>Tax transition intelligence for Brazilian fiscal operations.</p>
+					<div class="shell__footer-right">
+						<p>{capabilitySummary.available}/{capabilitySummary.total} capabilities live</p>
+						<a class="shell__action-button shell__action-button--ghost" href="/platform"
+							>Open operations</a
+						>
+					</div>
+				</div>
+			</footer>
+		</div>
+
+		<section class="shell__session-area">
+			<section class="shell__session-card" aria-label="Session state">
+				<h2>Session</h2>
+				<dl>
+					<div>
+						<dt>user</dt>
+						<dd>{data.session?.user ?? 'Guest'}</dd>
+					</div>
+					<div>
+						<dt>tenant</dt>
+						<dd>{data.session?.tenantId ?? '—'}</dd>
+					</div>
+					<div>
+						<dt>scopes</dt>
+						<dd>{data.session?.scopes?.length ? `${data.session.scopes.length}` : 'No scopes'}</dd>
+					</div>
+				</dl>
+
+				<div class="shell__scope-list shell__scope-list--desktop">
+					{#if data.session?.scopes?.length}
+						{#each data.session.scopes as scope}
+							<span>{scope}</span>
+						{/each}
+					{:else}
+						<p>No scopes</p>
+					{/if}
+				</div>
+
+				<details class="shell__scope-details">
+					<summary>View scopes</summary>
+					<div class="shell__scope-list">
+						{#if data.session?.scopes?.length}
+							{#each data.session.scopes as scope}
+								<span>{scope}</span>
+							{/each}
+						{:else}
+							<p>No scopes</p>
+						{/if}
+					</div>
+				</details>
+			</section>
 		</section>
-	{/if}
-
-	<main bind:this={mainContent} id="main-content" tabindex="-1">
-		{@render children()}
-	</main>
-
-	<footer class="shell-footer">
-		<p>Server-rendered SvelteKit frontend with a server-only API boundary for FiscalBrain-BR.</p>
-	</footer>
+	</div>
 </div>
 
 <style>
-	.shell-header,
-	.session-strip,
-	.shell-footer {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		background: rgba(255, 255, 255, 0.74);
-		box-shadow: var(--shadow-soft);
+	.shell {
+		display: grid;
+		grid-template-rows: auto 1fr;
+		min-height: 100vh;
+		background: var(--bg);
 	}
 
-	.shell-header {
+	.shell__topbar {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: var(--space-4);
-		padding: var(--space-5);
-		margin-bottom: var(--space-5);
+		gap: 1.5rem;
+		padding: 0 1.5rem;
+		min-height: 52px;
+		background: var(--bg-1);
+		border-bottom: 1px solid var(--border);
+		color: var(--text);
 	}
 
-	.shell-header__title,
-	.shell-footer p,
-	.session-strip p {
+	.shell__topbar-left,
+	.shell__brand,
+	.shell__actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.shell__brand {
+		gap: 0.5rem;
+		font-family: var(--font-mono);
+		font-size: 0.93rem;
+		font-weight: 500;
+		letter-spacing: 0.02em;
+		color: var(--text);
+		text-decoration: none;
+	}
+
+	.shell__brand-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--accent);
+		box-shadow: 0 0 6px rgba(79, 142, 247, 0.6);
+	}
+
+	.shell__divider {
+		width: 1px;
+		height: 20px;
+		background: var(--border);
+	}
+
+	.shell__breadcrumb {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-family: var(--font-mono);
+		font-size: 0.82rem;
+		color: var(--text-faint);
+	}
+
+	.shell__breadcrumb-active {
+		color: var(--text-muted);
+	}
+
+	.shell__session-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.15rem 0;
+		background: transparent;
+		border: 0;
+		border-radius: var(--radius-sm);
+		font-size: 0.74rem;
+		color: var(--text-faint);
+		font-family: var(--font-mono);
+	}
+
+	.shell__session-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--success);
+	}
+
+	.shell__session-dot--inactive {
+		background: var(--text-faint);
+	}
+
+	.shell__action-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 2.75rem;
+		padding: 0.35rem 0.85rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-2);
+		color: var(--text-muted);
+		font-size: 0.86rem;
+		cursor: pointer;
+		text-decoration: none;
+	}
+
+	.shell__action-button:hover {
+		background: var(--bg-3);
+		border-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	.shell__action-button--ghost {
+		background: transparent;
+		border-color: transparent;
+	}
+
+	.shell__action-button--ghost:hover {
+		background: var(--bg-2);
+		border-color: var(--border);
+	}
+
+	.shell__layout {
+		display: grid;
+		grid-template-columns: 220px minmax(0, 1fr);
+		grid-template-areas:
+			'sidebar content'
+			'session content';
+		grid-template-rows: auto 1fr;
+		min-height: calc(100vh - 52px);
+		background: var(--bg);
+		background-color: var(--bg) !important;
+	}
+
+	.shell__sidebar {
+		grid-area: sidebar;
+		display: flex;
+		flex-direction: column;
+		padding: 1rem 0;
+		background: var(--bg-1);
+		border-right: 1px solid var(--border);
+		color: var(--text);
+	}
+
+	.shell__sidebar-label {
+		padding: 0 1rem 0.4rem;
+		font-size: 0.7rem;
+		font-family: var(--font-mono);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.cap-nav {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.cap-nav__link {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.5rem 1rem;
+		border-left: 2px solid transparent;
+		color: var(--text-muted);
+		text-decoration: none;
+	}
+
+	.cap-nav__link:hover {
+		background: rgba(255, 255, 255, 0.03);
+		color: var(--text);
+	}
+
+	.cap-nav__link--active {
+		background: var(--accent-soft);
+		border-left-color: var(--accent);
+		color: var(--text);
+	}
+
+	.cap-nav__title-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		gap: 0.75rem;
+	}
+
+	.cap-nav__title-wrap {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.cap-nav__icon {
+		width: 16px;
+		text-align: center;
+		font-size: 0.9rem;
+	}
+
+	.cap-nav__title {
+		font-size: 0.93rem;
+	}
+
+	.cap-nav__badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.12rem 0.38rem;
+		border-radius: 3px;
+		font-size: 0.68rem;
+		font-family: var(--font-mono);
+		letter-spacing: 0.04em;
+		border: 1px solid transparent;
+	}
+
+	.cap-nav__badge--public,
+	.cap-nav__badge--available {
+		background: var(--success-soft);
+		color: var(--success);
+		border-color: var(--success-border);
+	}
+
+	.cap-nav__badge--partial {
+		background: var(--warning-soft);
+		color: var(--warning);
+		border-color: var(--warning-border);
+	}
+
+	.cap-nav__badge--locked {
+		background: var(--danger-soft);
+		color: var(--danger);
+		border-color: var(--danger-border);
+	}
+
+	.shell__session-card {
+		margin: 0;
+		padding: 0.85rem 1rem 1rem;
+		border-radius: 0;
+		display: grid;
+		gap: 0.6rem;
+		background: transparent;
+		border: 0;
+		border-top: 1px solid var(--border);
+	}
+
+	.shell__session-area {
+		grid-area: session;
+		background: var(--bg-1);
+		border-right: 1px solid var(--border);
+	}
+
+	.shell__session-card h2 {
+		margin: 0;
+		font-size: 0.72rem;
+		font-family: var(--font-mono);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.shell__session-card dl {
+		display: grid;
+		gap: 0;
 		margin: 0;
 	}
 
-	.shell-header__title {
-		font-size: 1.15rem;
-		font-weight: 700;
+	.shell__session-card dl div {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 0.5rem;
+		padding: 0.22rem 0;
+		border-bottom: 0;
 	}
 
-	.shell-nav {
+	.shell__session-card dl div:last-child {
+		border-bottom: 0;
+	}
+
+	.shell__session-card dt,
+	.shell__session-card dd {
+		margin: 0;
+		font-family: var(--font-mono);
+		font-size: 0.76rem;
+	}
+
+	.shell__session-card dt {
+		color: var(--text-faint);
+		text-transform: lowercase;
+	}
+
+	.shell__session-card dd {
+		color: var(--text);
+		text-align: right;
+	}
+
+	.shell__scope-list {
 		display: flex;
 		flex-wrap: wrap;
+		gap: 0.45rem;
+	}
+
+	.shell__scope-list--desktop {
+		display: flex;
+	}
+
+	.shell__scope-list span {
+		display: inline-flex;
 		align-items: center;
-		gap: var(--space-3);
+		justify-content: center;
+		padding: 0.15rem 0.4rem;
+		border-radius: 3px;
+		background: var(--bg-3);
+		border: 1px solid var(--border);
+		font-size: 0.68rem;
+		font-family: var(--font-mono);
+		color: var(--text-muted);
 	}
 
-	.shell-link {
-		text-decoration: none;
-		font-weight: 700;
-		color: var(--color-accent-strong);
+	.shell__scope-list p {
+		margin: 0.25rem 0 0;
+		font-size: 0.78rem;
+		color: var(--text-faint);
+		line-height: 1.5;
 	}
 
-	.shell-link--button {
-		background: none;
-		border: none;
-		padding: 0;
+	.shell__scope-details {
+		display: none;
+	}
+
+	.shell__scope-details summary {
 		cursor: pointer;
+		font-size: 0.78rem;
+		font-family: var(--font-mono);
+		color: var(--text-muted);
 	}
 
-	.session-strip {
+	.shell__content {
+		grid-area: content;
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: var(--space-4);
-		padding: var(--space-4) var(--space-5);
-		margin-bottom: var(--space-5);
+		grid-template-rows: 1fr auto;
+		min-width: 0;
+		overflow: auto;
+		background: var(--bg);
+		background-color: var(--bg) !important;
+		color: var(--text);
 	}
 
 	main {
 		display: grid;
-		gap: var(--space-5);
+		min-width: 0;
+		background: var(--bg);
+		background-color: var(--bg) !important;
+		color: var(--text);
+	}
+
+	.shell__viewport {
+		width: min(1080px, calc(100% - 3rem));
+		margin: 0 auto;
 	}
 
 	main:focus-visible {
-		border-radius: var(--radius-lg);
-		outline: 3px solid var(--color-accent);
-		outline-offset: 4px;
+		outline-offset: -3px;
 	}
 
-	.shell-footer {
-		padding: var(--space-4) var(--space-5);
-		margin-top: var(--space-5);
-		color: var(--color-ink-muted);
+	.shell__footer {
+		padding: 0.85rem 0;
+		border-top: 1px solid var(--border);
+		font-size: 0.78rem;
+		font-family: var(--font-mono);
+		color: var(--text-faint);
+	}
+
+	.shell__footer-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		width: min(1080px, calc(100vw - 3rem));
+		margin: 0 auto;
+	}
+
+	.shell__footer-right {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	@media (max-width: 1024px) {
+		.shell__layout {
+			grid-template-columns: 1fr;
+			grid-template-areas:
+				'sidebar'
+				'content'
+				'session';
+			grid-template-rows: auto 1fr auto;
+		}
+
+		.shell__sidebar {
+			border-right: 0;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.shell__sidebar-label {
+			padding-bottom: 0.6rem;
+		}
+
+		.cap-nav {
+			flex-direction: row;
+			gap: 0.5rem;
+			padding: 0 1rem;
+			overflow-x: auto;
+			scrollbar-width: thin;
+		}
+
+		.cap-nav__link {
+			flex: 0 0 auto;
+			min-width: max-content;
+			padding: 0.65rem 0.9rem;
+			border-left: 0;
+			border: 1px solid var(--border);
+			border-radius: var(--radius-sm);
+			background: var(--bg-2);
+		}
+
+		.cap-nav__link--active {
+			border-color: var(--accent-border);
+		}
+
+		.cap-nav__title-row {
+			width: auto;
+		}
+
+		.shell__session-area {
+			padding: 0 0 1rem;
+			background: var(--bg);
+			border-right: 0;
+			border-top: 1px solid var(--border);
+		}
+
+		.shell__session-card {
+			padding-inline: 1.75rem;
+		}
+
+		.shell__scope-list--desktop {
+			display: none;
+		}
+
+		.shell__scope-details {
+			display: grid;
+			gap: 0.75rem;
+		}
 	}
 
 	@media (max-width: 720px) {
-		.shell-header {
+		.shell__topbar,
+		.shell__topbar-left,
+		.shell__actions {
 			flex-direction: column;
 			align-items: flex-start;
+		}
+
+		.shell__topbar {
+			padding: 0.9rem 1rem;
+		}
+
+		.cap-nav__title-row {
+			display: flex;
+			width: 100%;
+		}
+
+		.shell__footer-inner,
+		.shell__footer-right {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		.shell__session-card {
+			padding-inline: 1rem;
+		}
+
+		.shell__session-card dl div {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		.shell__session-card dd {
+			text-align: left;
 		}
 	}
 </style>
