@@ -5,6 +5,8 @@ use chrono::{DateTime, Utc, NaiveDate};
 use sqlx::PgPool;
 
 use crate::api::middleware::error::AppError;
+use crate::config::ModelsConfig;
+use crate::services::rag::RagService;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IngestionJob {
@@ -35,6 +37,83 @@ pub struct AuditJob {
 pub struct IngestionService;
 
 impl IngestionService {
+    pub async fn process_job(pool: &PgPool, cfg: &ModelsConfig, job: IngestionJob) -> anyhow::Result<()> {
+        let raw = job.raw_content.as_deref().unwrap_or("");
+        let chunks = chunk_text(raw, 1200, 120).map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        let content_hash = hash_content(raw);
+
+        let mut tx = pool.begin().await?;
+        crate::api::middleware::tenant::set_rls_session(&mut tx, job.company_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+
+        let kb_id: uuid::Uuid = sqlx::query_scalar(
+            r#"INSERT INTO fiscal_knowledge_base
+                   (company_id, law_ref, law_type, content, source_url, published_at, effective_at,
+                    metadata, content_hash, content_version)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,1)
+               ON CONFLICT (law_ref, company_id) WHERE company_id IS NOT NULL
+               DO UPDATE SET
+                   content = EXCLUDED.content,
+                   content_hash = EXCLUDED.content_hash,
+                   content_version = fiscal_knowledge_base.content_version + 1,
+                   updated_at = NOW()
+               RETURNING id"#,
+        )
+        .bind(job.company_id)
+        .bind(&job.law_ref)
+        .bind(&job.law_type)
+        .bind(raw)
+        .bind(&job.source_url)
+        .bind(job.published_at)
+        .bind(job.effective_at)
+        .bind(serde_json::json!({ "tags": job.tags }))
+        .bind(&content_hash)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        // Embed all chunks in one batch call
+        let chunk_refs: Vec<&str> = chunks.iter().map(|s| s.as_str()).collect();
+        let embeddings = RagService::embed_batch(cfg, &chunk_refs).await
+            .map_err(|e| anyhow::anyhow!("embedding batch failed: {e}"))?;
+
+        for (i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
+            let vec_literal = to_vector_literal_f32(embedding);
+            sqlx::query(
+                r#"INSERT INTO fiscal_knowledge_chunk (knowledge_id, company_id, chunk_index, content, embedding, metadata)
+                   VALUES ($1,$2,$3,$4,$5::vector,$6::jsonb)
+                   ON CONFLICT (knowledge_id, chunk_index) DO UPDATE
+                     SET content = EXCLUDED.content, embedding = EXCLUDED.embedding"#,
+            )
+            .bind(kb_id)
+            .bind(job.company_id)
+            .bind(i as i32)
+            .bind(chunk)
+            .bind(vec_literal)
+            .bind(serde_json::json!({ "law_ref": job.law_ref, "chunk_index": i }))
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        sqlx::query(
+            r#"INSERT INTO fiscal_audit_log (company_id, sku_id, event_type, actor, request_id, event_payload)
+               VALUES ($1,'ingestion','INGESTION_COMPLETE','worker',$2,$3::jsonb)"#,
+        )
+        .bind(job.company_id)
+        .bind(&job.request_id)
+        .bind(serde_json::json!({
+            "job_id": job.job_id,
+            "law_ref": job.law_ref,
+            "kb_id": kb_id,
+            "chunk_count": chunks.len(),
+        }))
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn enqueue(
         pool: &PgPool,
         company_id: Uuid,
@@ -134,6 +213,11 @@ fn split_with_overlap(text: &str, max: usize, overlap: usize) -> Vec<String> {
 /// Ported from VectorUtils.kt
 pub fn to_vector_literal(values: &[f64]) -> String {
     let inner = values.iter().map(|v| format!("{v:.10}")).collect::<Vec<_>>().join(",");
+    format!("[{inner}]")
+}
+
+pub fn to_vector_literal_f32(values: &[f32]) -> String {
+    let inner = values.iter().map(|v| format!("{v:.8}")).collect::<Vec<_>>().join(",");
     format!("[{inner}]")
 }
 

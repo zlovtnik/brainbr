@@ -79,6 +79,7 @@ pub struct SecurityConfig {
     pub jwt_tenant_claim: String,
     pub jwt_enabled: bool,
     pub bypass_rls_enabled: bool,
+    pub dev_tenant_id: Option<String>,
 }
 
 impl AppConfig {
@@ -117,6 +118,7 @@ impl AppConfig {
                 jwt_tenant_claim: optional("APP_SECURITY_JWT_TENANT_CLAIM", "tenant_id"),
                 jwt_enabled: optional("APP_SECURITY_JWT_ENABLED", "true").parse().context("APP_SECURITY_JWT_ENABLED must be true/false")?,
                 bypass_rls_enabled: optional("APP_BYPASS_RLS_ENABLED", "false").parse().context("APP_BYPASS_RLS_ENABLED must be true/false")?,
+                dev_tenant_id: env::var("APP_DEV_TENANT_ID").ok().filter(|s| !s.is_empty()),
             },
             log_level: optional("LOG_LEVEL", "INFO"),
             log_format: optional("LOG_FORMAT", "text"),

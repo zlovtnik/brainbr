@@ -4,16 +4,15 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use sqlx::PgPool;
-use std::sync::Arc;
 
 use crate::api::middleware::{error::AppError, tenant::TenantId};
+use crate::api::AppState;
 use crate::services::transition::TransitionService;
 
 pub async fn calendar(
-    State(pool): State<Arc<PgPool>>,
+    State(s): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let result = TransitionService::calendar(&pool).await?;
+    let result = TransitionService::calendar(&s.pool).await?;
     Ok(Json(result))
 }
 
@@ -23,11 +22,20 @@ pub struct EffectiveRateQuery {
 }
 
 pub async fn effective_rate(
-    State(pool): State<Arc<PgPool>>,
+    State(s): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Path(sku_id): Path<String>,
     Query(q): Query<EffectiveRateQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let result = TransitionService::effective_rate(&pool, tenant.0, &sku_id, q.year).await?;
+    let result = TransitionService::effective_rate(&s.pool, tenant.0, &sku_id, q.year).await?;
+    Ok(Json(result))
+}
+
+pub async fn forecast(
+    State(s): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(sku_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let result = TransitionService::forecast(&s.pool, tenant.0, &sku_id).await?;
     Ok(Json(result))
 }

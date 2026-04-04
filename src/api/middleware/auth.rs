@@ -31,6 +31,7 @@ pub struct JwksState {
     pub issuer_uri: Option<String>,
     pub tenant_claim: String,
     pub enabled: bool,
+    pub dev_tenant_id: Option<String>,
     client: reqwest::Client,
     cache: RwLock<Option<JwksCache>>,
 }
@@ -45,6 +46,7 @@ impl JwksState {
             issuer_uri: config.jwt_issuer_uri.clone(),
             tenant_claim: config.jwt_tenant_claim.clone(),
             enabled: config.jwt_enabled,
+            dev_tenant_id: config.dev_tenant_id.clone(),
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
                 .build()
@@ -129,7 +131,7 @@ pub async fn auth_middleware(
     if !jwks.enabled {
         req.extensions_mut().insert(AuthenticatedClaims {
             sub: "dev".into(),
-            tenant_claim: None,
+            tenant_claim: jwks.dev_tenant_id.clone(),
             scopes: vec!["*".into()],
             raw: Value::Null,
         });

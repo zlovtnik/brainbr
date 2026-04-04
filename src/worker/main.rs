@@ -2,10 +2,13 @@ use fiscalbrain_br::{
     config::AppConfig,
     db,
     queue::RedisQueueClient,
-    services::pipeline::{AuditJob, IngestionJob},
+    services::{
+        audit::AuditService,
+        pipeline::{AuditJob, IngestionJob, IngestionService},
+    },
 };
-use std::sync::Arc;
-use std::time::Duration;
+use serde::de::DeserializeOwned;
+use std::{future::Future, sync::Arc, time::Duration};
 use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
@@ -15,7 +18,6 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
     let cfg = AppConfig::from_env()?;
-
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(&cfg.log_level));
     tracing_subscriber::fmt().with_env_filter(filter).init();
@@ -24,120 +26,58 @@ async fn main() -> anyhow::Result<()> {
 
     let pool = Arc::new(db::create_pool(&cfg.database_url, cfg.db_pool_max).await?);
     let queue = RedisQueueClient::new(&cfg.redis_url, &cfg.queue).await?;
-
-    let consumer_name = format!("worker-{}", Uuid::new_v4());
-    let audit_poll_ms = cfg.worker.audit_poll_interval_ms;
-    let ingestion_poll_ms = cfg.worker.ingestion_poll_interval_ms;
-    let transition_refresh_ms = cfg.worker.transition_refresh_interval_ms;
-    let heartbeat_ms = cfg.worker.heartbeat_interval_ms;
+    let consumer = format!("worker-{}", Uuid::new_v4());
 
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
-
-    let shutdown_tx_signal = shutdown_tx.clone();
+    let tx = shutdown_tx.clone();
     tokio::spawn(async move {
         let _ = tokio::signal::ctrl_c().await;
         tracing::info!("Shutdown signal received");
-        let _ = shutdown_tx_signal.send(());
+        let _ = tx.send(());
     });
 
-    // Audit worker
-    let audit_stream = queue.audit_stream.clone();
-    let audit_group = queue.audit_group.clone();
-    let audit_dlq = queue.audit_dlq.clone();
-    let audit_consumer = consumer_name.clone();
-    let mut queue_audit = queue.clone();
-    let mut shutdown_rx = shutdown_tx.subscribe();
+    let pool_audit = pool.clone();
+    let models_audit = cfg.models.clone();
+    let audit_handle = tokio::spawn(run_worker::<AuditJob, _, _>(
+        queue.clone(),
+        queue.audit_stream.clone(),
+        queue.audit_group.clone(),
+        queue.audit_dlq.clone(),
+        consumer.clone(),
+        cfg.worker.audit_poll_interval_ms,
+        shutdown_tx.subscribe(),
+        move |job| {
+            let pool = pool_audit.clone();
+            let models = models_audit.clone();
+            async move { AuditService::process_audit_job(&pool, &models, job).await }
+        },
+    ));
 
-    let audit_handle = tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = shutdown_rx.recv() => {
-                    tracing::info!("Audit worker shutting down");
-                    break;
-                }
-                result = queue_audit.read_batch(&audit_stream, &audit_group, &audit_consumer, 10, audit_poll_ms) => {
-                    match result {
-                        Ok(messages) => {
-                            for (id, payload) in messages {
-                                match serde_json::from_str::<AuditJob>(&payload) {
-                                    Ok(job) => {
-                                        tracing::info!(job_id = %job.job_id, sku_id = %job.sku_id, "Processing audit job");
-                                        // TODO: call AuditService::process_audit_job(&pool, job).await
-                                        // Only ack after successful processing
-                                        if let Err(e) = queue_audit.acknowledge(&audit_stream, &audit_group, &id).await {
-                                            tracing::error!("Failed to ack audit job {}: {e}", job.job_id);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("Failed to deserialize audit job: {e}");
-                                        match queue_audit.move_to_dlq(&audit_dlq, &payload).await {
-                                            Ok(_) => { let _ = queue_audit.acknowledge(&audit_stream, &audit_group, &id).await; }
-                                            Err(dlq_err) => tracing::error!("DLQ write failed, message will redeliver: {dlq_err}"),
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => tracing::warn!("Audit queue read error: {e}"),
-                    }
-                }
-            }
-        }
-    });
+    let pool_ingestion = pool.clone();
+    let models_ingestion = cfg.models.clone();
+    let ingestion_handle = tokio::spawn(run_worker::<IngestionJob, _, _>(
+        queue.clone(),
+        queue.ingestion_stream.clone(),
+        queue.ingestion_group.clone(),
+        queue.ingestion_dlq.clone(),
+        consumer.clone(),
+        cfg.worker.ingestion_poll_interval_ms,
+        shutdown_tx.subscribe(),
+        move |job| {
+            let pool = pool_ingestion.clone();
+            let models = models_ingestion.clone();
+            async move { IngestionService::process_job(&pool, &models, job).await }
+        },
+    ));
 
-    // Ingestion worker
-    let ingestion_stream = queue.ingestion_stream.clone();
-    let ingestion_group = queue.ingestion_group.clone();
-    let ingestion_dlq = queue.ingestion_dlq.clone();
-    let ingestion_consumer = consumer_name.clone();
-    let mut queue_ingestion = queue.clone();
-    let mut shutdown_rx2 = shutdown_tx.subscribe();
-
-    let ingestion_handle = tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = shutdown_rx2.recv() => {
-                    tracing::info!("Ingestion worker shutting down");
-                    break;
-                }
-                result = queue_ingestion.read_batch(&ingestion_stream, &ingestion_group, &ingestion_consumer, 10, ingestion_poll_ms) => {
-                    match result {
-                        Ok(messages) => {
-                            for (id, payload) in messages {
-                                match serde_json::from_str::<IngestionJob>(&payload) {
-                                    Ok(job) => {
-                                        tracing::info!(job_id = %job.job_id, law_ref = %job.law_ref, "Processing ingestion job");
-                                        // TODO: call IngestionService::process_job(&pool, job).await
-                                        // Only ack after successful processing
-                                        if let Err(e) = queue_ingestion.acknowledge(&ingestion_stream, &ingestion_group, &id).await {
-                                            tracing::error!("Failed to ack ingestion job {}: {e}", job.job_id);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        tracing::error!("Failed to deserialize ingestion job: {e}");
-                                        match queue_ingestion.move_to_dlq(&ingestion_dlq, &payload).await {
-                                            Ok(_) => { let _ = queue_ingestion.acknowledge(&ingestion_stream, &ingestion_group, &id).await; }
-                                            Err(dlq_err) => tracing::error!("DLQ write failed, message will redeliver: {dlq_err}"),
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => tracing::warn!("Ingestion queue read error: {e}"),
-                    }
-                }
-            }
-        }
-    });
-
-    // Transition MV refresh
     let pool_refresh = pool.clone();
-    let mut shutdown_rx3 = shutdown_tx.subscribe();
+    let mut shutdown_refresh = shutdown_tx.subscribe();
+    let refresh_ms = cfg.worker.transition_refresh_interval_ms;
     let refresh_handle = tokio::spawn(async move {
         loop {
             tokio::select! {
-                _ = shutdown_rx3.recv() => { tracing::info!("Refresh worker shutting down"); break; }
-                _ = tokio::time::sleep(Duration::from_millis(transition_refresh_ms)) => {
+                _ = shutdown_refresh.recv() => { tracing::info!("Refresh worker shutting down"); break; }
+                _ = tokio::time::sleep(Duration::from_millis(refresh_ms)) => {
                     match refresh_mv(&pool_refresh).await {
                         Ok(Some(ms)) => tracing::info!("mv_fiscal_impact refresh complete in {ms}ms"),
                         Ok(None) => tracing::debug!("mv_fiscal_impact refresh skipped (lock held by another worker)"),
@@ -148,21 +88,70 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // Heartbeat
-    let mut shutdown_rx4 = shutdown_tx.subscribe();
+    let heartbeat_ms = cfg.worker.heartbeat_interval_ms;
+    let mut shutdown_hb = shutdown_tx.subscribe();
     let heartbeat_handle = tokio::spawn(async move {
         loop {
             tokio::select! {
-                _ = shutdown_rx4.recv() => { break; }
-                _ = tokio::time::sleep(Duration::from_millis(heartbeat_ms)) => {
-                    tracing::info!("Worker heartbeat");
-                }
+                _ = shutdown_hb.recv() => break,
+                _ = tokio::time::sleep(Duration::from_millis(heartbeat_ms)) => tracing::info!("Worker heartbeat"),
             }
         }
     });
 
     tokio::try_join!(audit_handle, ingestion_handle, refresh_handle, heartbeat_handle)?;
     Ok(())
+}
+
+async fn run_worker<J, F, Fut>(
+    mut queue: RedisQueueClient,
+    stream: String,
+    group: String,
+    dlq: String,
+    consumer: String,
+    poll_ms: u64,
+    mut shutdown: broadcast::Receiver<()>,
+    process: F,
+) where
+    J: DeserializeOwned,
+    F: Fn(J) -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    loop {
+        tokio::select! {
+            _ = shutdown.recv() => {
+                tracing::info!(stream, "Worker shutting down");
+                break;
+            }
+            result = queue.read_batch(&stream, &group, &consumer, 10, poll_ms) => {
+                let messages = match result {
+                    Ok(m) => m,
+                    Err(e) => { tracing::warn!(stream, "Queue read error: {e}"); continue; }
+                };
+                for (id, payload) in messages {
+                    match serde_json::from_str::<J>(&payload) {
+                        Ok(job) => {
+                            match process(job).await {
+                                Ok(()) => {
+                                    if let Err(e) = queue.acknowledge(&stream, &group, &id).await {
+                                        tracing::error!(stream, "Failed to ack {id}: {e}");
+                                    }
+                                }
+                                Err(e) => tracing::error!(stream, "Job processing failed, will redeliver: {e}"),
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(stream, "Failed to deserialize job: {e}");
+                            match queue.move_to_dlq(&dlq, &payload).await {
+                                Ok(_) => { let _ = queue.acknowledge(&stream, &group, &id).await; }
+                                Err(dlq_err) => tracing::error!(stream, "DLQ write failed, message will redeliver: {dlq_err}"),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Returns Ok(Some(ms)) on successful refresh, Ok(None) when lock is held by another worker.
@@ -172,9 +161,7 @@ async fn refresh_mv(pool: &sqlx::PgPool) -> anyhow::Result<Option<u128>> {
         .bind(LOCK_KEY)
         .fetch_one(pool).await?;
 
-    if !locked {
-        return Ok(None);
-    }
+    if !locked { return Ok(None); }
 
     let start = std::time::Instant::now();
     let result = sqlx::query("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_fiscal_impact")

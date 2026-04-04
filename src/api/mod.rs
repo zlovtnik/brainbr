@@ -14,9 +14,16 @@ use middleware::auth::{auth_middleware, JwksState};
 use middleware::tenant::tenant_middleware;
 use routes::health::HealthRegistry;
 
+#[derive(Clone)]
+pub struct AppState {
+    pub pool: Arc<PgPool>,
+    pub config: Arc<AppConfig>,
+}
+
 pub fn build_router(pool: Arc<PgPool>, config: Arc<AppConfig>) -> Router {
     let jwks = Arc::new(JwksState::new(&config.security));
     let registry = Arc::new(HealthRegistry::new(pool.clone()));
+    let state = AppState { pool: pool.clone(), config: config.clone() };
 
     let public = Router::new()
         .route("/actuator/health", get(routes::health::health))
@@ -29,6 +36,7 @@ pub fn build_router(pool: Arc<PgPool>, config: Arc<AppConfig>) -> Router {
     let protected = Router::new()
         .route("/api/v1/transition/calendar", get(routes::transition::calendar))
         .route("/api/v1/transition/sku/:sku_id/effective-rate", get(routes::transition::effective_rate))
+        .route("/api/v1/transition/sku/:sku_id/forecast", get(routes::transition::forecast))
         .route("/api/v1/inventory/sku", get(routes::inventory::list))
         .route("/api/v1/inventory/sku", post(routes::inventory::upsert))
         .route("/api/v1/inventory/sku/:sku_id", get(routes::inventory::get))
@@ -42,7 +50,7 @@ pub fn build_router(pool: Arc<PgPool>, config: Arc<AppConfig>) -> Router {
         .route("/api/v1/split-payment/events", post(routes::split_payment::create))
         .route("/api/v1/split-payment/events", get(routes::split_payment::list))
         .route("/api/v1/ingestion/jobs", post(routes::ingestion::create_job))
-        .with_state(pool.clone())
+        .with_state(state)
         .layer(axum_middleware::from_fn_with_state(pool.clone(), tenant_middleware))
         .layer(axum_middleware::from_fn_with_state(jwks, auth_middleware));
 

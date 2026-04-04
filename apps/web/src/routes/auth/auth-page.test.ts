@@ -7,40 +7,30 @@ import type { PageProps } from './$types';
 
 const data = {
 	session: null,
-	redirectTo: '/platform',
-	hardcodedUsername: 'demo-user'
+	redirectTo: '/platform'
 } satisfies PageProps['data'];
 
 describe('auth page', () => {
-	it('defaults the token flow to a collapsed advanced section', () => {
-		const { container } = render(AuthPage, {
-			props: {
-				data,
-				form: null,
-				params: {}
-			}
-		});
+	it('renders the JWT sign-in form', () => {
+		render(AuthPage, { props: { data, form: null, params: {} } });
 
-		expect(screen.getByText('Recommended')).toBeTruthy();
-		expect(screen.getByRole('button', { name: 'Sign in with credentials' })).toBeTruthy();
-		expect(container.querySelector('details')?.hasAttribute('open')).toBe(false);
+		expect(screen.getByLabelText('Bearer JWT')).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
 	});
 
-	it('keeps focus on the username field after a login error', async () => {
+	it('shows an error notice and focuses the token field on failure', async () => {
 		render(AuthPage, {
 			props: {
 				data,
 				params: {},
-				form: {
-					loginError: 'Invalid credentials.',
-					redirectTo: '/platform',
-					username: 'demo-user'
-				}
+				form: { error: 'JWT is missing required scope: inventory:read.', redirectTo: '/platform' }
 			}
 		});
 
+		expect(screen.getByText('JWT is missing required scope: inventory:read.')).toBeTruthy();
+
 		await waitFor(() => {
-			expect(document.activeElement?.id).toBe('username');
+			expect(document.activeElement?.id).toBe('token');
 		});
 	});
 });
