@@ -19,7 +19,7 @@ test-results/
 
 # Environment
 .env
-
+/target
 # IDE
 .idea/
 .vscode/

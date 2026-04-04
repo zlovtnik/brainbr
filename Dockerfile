@@ -1,16 +1,24 @@
-FROM gradle:9.4.0-jdk21 AS build
+FROM rust:1.82-slim AS builder
 WORKDIR /workspace
 
-COPY build.gradle.kts settings.gradle.kts gradle.properties ./
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml ./
+# Cache deps layer
+RUN mkdir src && echo "fn main(){}" > src/main.rs && cargo build --release --bin api 2>/dev/null || true
+RUN rm -rf src
+
 COPY src ./src
+COPY migrations ./migrations
+RUN cargo build --release --bin api --bin worker
 
-RUN gradle --no-daemon bootJar
-
-FROM eclipse-temurin:21-jre
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
-COPY --from=build /workspace/build/libs/*.jar /app/app.jar
+COPY --from=builder /workspace/target/release/api /app/api
+COPY --from=builder /workspace/target/release/worker /app/worker
+COPY --from=builder /workspace/migrations /app/migrations
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
-
+ENTRYPOINT ["/app/api"]
