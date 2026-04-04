@@ -12,3 +12,18 @@ playwright-report/
 test-results/
 .env.*
 !.env.example
+**/*.rs.bk
+
+# SQLx offline query cache (commit this if you want offline builds in CI)
+# .sqlx/
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
