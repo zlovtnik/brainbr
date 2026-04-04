@@ -77,6 +77,13 @@ impl IngestionService {
         let embeddings = RagService::embed_batch(cfg, &chunk_refs).await
             .map_err(|e| anyhow::anyhow!("embedding batch failed: {e}"))?;
 
+        // Remove stale chunks from previous versions that are beyond the new count
+        sqlx::query("DELETE FROM fiscal_knowledge_chunk WHERE knowledge_id = $1 AND chunk_index >= $2")
+            .bind(kb_id)
+            .bind(chunks.len() as i32)
+            .execute(&mut *tx)
+            .await?;
+
         for (i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
             let vec_literal = to_vector_literal_f32(embedding);
             sqlx::query(

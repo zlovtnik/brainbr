@@ -1,11 +1,20 @@
 use anyhow::{anyhow, Context};
+use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::config::ModelsConfig;
+
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
+    Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("failed to build HTTP client")
+});
 
 // ── OpenAI wire types ────────────────────────────────────────────────────────
 
@@ -87,7 +96,7 @@ impl RagService {
         if cfg.provider_mode == "mock" {
             return Ok(vec![0.0f32; 1536]);
         }
-        let resp: EmbedResponse = Client::new()
+        let resp: EmbedResponse = HTTP_CLIENT
             .post(format!("{}/embeddings", cfg.openai_base_url))
             .bearer_auth(&cfg.openai_api_key)
             .json(&EmbedRequest { model: &cfg.embedding, input: vec![text] })
@@ -104,7 +113,7 @@ impl RagService {
         if cfg.provider_mode == "mock" {
             return Ok(texts.iter().map(|_| vec![0.0f32; 1536]).collect());
         }
-        let resp: EmbedResponse = Client::new()
+        let resp: EmbedResponse = HTTP_CLIENT
             .post(format!("{}/embeddings", cfg.openai_base_url))
             .bearer_auth(&cfg.openai_api_key)
             .json(&EmbedRequest { model: &cfg.embedding, input: texts.to_vec() })
@@ -202,7 +211,24 @@ impl RagService {
 
 // ── Prompt ────────────────────────────────────────────────────────────────────
 
+fn sanitize_input(s: &str) -> String {
+    s.chars()
+        .filter(|c| !matches!(c, '\x00'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\x7f'))
+        .map(|c| match c {
+            '{' => '(', '}' => ')', '"' => '\'' , '\n' | '\r' => ' ',
+            c => c,
+        })
+        .take(500)
+        .collect()
+}
+
 fn build_prompt(ncm: &str, desc: &str, origin: &str, dest: &str, context: &str) -> String {
+    let (ncm, desc, origin, dest) = (
+        sanitize_input(ncm),
+        sanitize_input(desc),
+        sanitize_input(origin),
+        sanitize_input(dest),
+    );
     format!(
         r#"Você é um especialista em tributação brasileira (Reforma Tributária EC 132/2023, LC 68/2024).
 
@@ -231,7 +257,7 @@ Responda APENAS com o JSON, sem texto adicional."#
 // ── LLM call ──────────────────────────────────────────────────────────────────
 
 async fn call_llm(cfg: &ModelsConfig, prompt: &str) -> anyhow::Result<Value> {
-    let resp: ChatResponse = Client::new()
+    let resp: ChatResponse = HTTP_CLIENT
         .post(format!("{}/chat/completions", cfg.openai_base_url))
         .bearer_auth(&cfg.openai_api_key)
         .json(&ChatRequest {

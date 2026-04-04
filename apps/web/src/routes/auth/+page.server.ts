@@ -38,7 +38,8 @@ export const actions: Actions = {
 			});
 		}
 
-		const missing = REQUIRED_SCOPES.filter((s) => !summary.scopes.includes(s));
+		const scopes = summary.scopes ?? [];
+		const missing = REQUIRED_SCOPES.filter((s) => !scopes.includes(s));
 		if (missing.length) {
 			return fail(400, {
 				error: `JWT is missing required scope${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}.`,

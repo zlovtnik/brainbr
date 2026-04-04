@@ -8,8 +8,8 @@ use fiscalbrain_br::{
     },
 };
 use serde::de::DeserializeOwned;
-use std::{future::Future, sync::Arc, time::Duration};
-use tokio::sync::broadcast;
+use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
+use tokio::sync::{broadcast, Mutex};
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
@@ -46,6 +46,8 @@ async fn main() -> anyhow::Result<()> {
         consumer.clone(),
         cfg.worker.audit_poll_interval_ms,
         shutdown_tx.subscribe(),
+        cfg.queue.retry_max_attempts,
+        cfg.queue.retry_base_backoff_ms,
         move |job| {
             let pool = pool_audit.clone();
             let models = models_audit.clone();
@@ -63,6 +65,8 @@ async fn main() -> anyhow::Result<()> {
         consumer.clone(),
         cfg.worker.ingestion_poll_interval_ms,
         shutdown_tx.subscribe(),
+        cfg.queue.retry_max_attempts,
+        cfg.queue.retry_base_backoff_ms,
         move |job| {
             let pool = pool_ingestion.clone();
             let models = models_ingestion.clone();
@@ -111,12 +115,17 @@ async fn run_worker<J, F, Fut>(
     consumer: String,
     poll_ms: u64,
     mut shutdown: broadcast::Receiver<()>,
+    max_retries: u32,
+    base_backoff_ms: u64,
     process: F,
 ) where
     J: DeserializeOwned,
     F: Fn(J) -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
+    // Per-message retry counters: message_id -> attempt count
+    let retry_counts: Arc<Mutex<HashMap<String, u32>>> = Arc::new(Mutex::new(HashMap::new()));
+
     loop {
         tokio::select! {
             _ = shutdown.recv() => {
@@ -133,11 +142,35 @@ async fn run_worker<J, F, Fut>(
                         Ok(job) => {
                             match process(job).await {
                                 Ok(()) => {
+                                    retry_counts.lock().await.remove(&id);
                                     if let Err(e) = queue.acknowledge(&stream, &group, &id).await {
                                         tracing::error!(stream, "Failed to ack {id}: {e}");
                                     }
                                 }
-                                Err(e) => tracing::error!(stream, "Job processing failed, will redeliver: {e}"),
+                                Err(e) => {
+                                    let attempt = {
+                                        let mut counts = retry_counts.lock().await;
+                                        let n = counts.entry(id.clone()).or_insert(0);
+                                        *n += 1;
+                                        *n
+                                    };
+                                    if attempt >= max_retries {
+                                        tracing::error!(stream, id, attempt, "Max retries reached, routing to DLQ: {e}");
+                                        retry_counts.lock().await.remove(&id);
+                                        match queue.move_to_dlq(&dlq, &payload).await {
+                                            Ok(_) => { let _ = queue.acknowledge(&stream, &group, &id).await; }
+                                            Err(dlq_err) => tracing::error!(stream, "DLQ write failed: {dlq_err}"),
+                                        }
+                                    } else {
+                                        let jitter = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .map(|d| d.subsec_nanos() as u64 % base_backoff_ms)
+                                            .unwrap_or(0);
+                                        let backoff = base_backoff_ms * (1u64 << (attempt - 1).min(6)) + jitter;
+                                        tracing::warn!(stream, id, attempt, backoff_ms = backoff, "Job failed, will redeliver: {e}");
+                                        tokio::time::sleep(Duration::from_millis(backoff)).await;
+                                    }
+                                }
                             }
                         }
                         Err(e) => {

@@ -74,14 +74,17 @@ impl AuditService {
         cfg: &ModelsConfig,
         job: crate::services::pipeline::AuditJob,
     ) -> anyhow::Result<()> {
-        // 1. Load SKU
+        // 1. Load SKU — begin transaction and enable RLS first
+        let mut tx = pool.begin().await?;
+        set_rls_session(&mut tx, job.company_id).await.map_err(|e| anyhow::anyhow!("{e:?}"))?;
+
         let sku = sqlx::query(
             "SELECT sku_id, description, ncm_code, origin_state, destination_state, legacy_taxes \
              FROM inventory_transition WHERE sku_id = $1 AND company_id = $2 AND is_active = TRUE",
         )
         .bind(&job.sku_id)
         .bind(job.company_id)
-        .fetch_optional(pool)
+        .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| anyhow::anyhow!("SKU {} not found", job.sku_id))?;
 
@@ -105,7 +108,7 @@ impl AuditService {
 
         // 4. Build explainability artifact
         let run_id = Uuid::new_v4();
-        let job_id_uuid: Uuid = job.job_id.parse().unwrap_or_else(|_| Uuid::new_v4());
+        let job_id_uuid: Uuid = job.job_id.parse().map_err(|e| anyhow::anyhow!("invalid job_id UUID: {e}"))?;
         let artifact_version = "1.0.0";
         let schema_version = "rag-output-v1";
         let source_snapshot = serde_json::json!({
@@ -133,8 +136,7 @@ impl AuditService {
             hex::encode(Sha256::digest(raw.as_bytes()))
         };
 
-        // 5. Persist — all in one transaction with RLS
-        let mut tx = pool.begin().await?;
+        // 5. Persist — all in one transaction with RLS (tx already open from step 1)
         set_rls_session(&mut tx, job.company_id).await.map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
         // Insert explainability run
@@ -178,7 +180,7 @@ impl AuditService {
         .bind(rag.top_chunk.chunk_id)
         .bind(rag.audit_confidence)
         .bind(&cfg.llm)
-        .bind(risk_score as i16)
+        .bind(risk_score.clamp(i16::MIN as i32, i16::MAX as i32) as i16)
         .bind(&job.sku_id)
         .bind(job.company_id)
         .execute(&mut *tx)
