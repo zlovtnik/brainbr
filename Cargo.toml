@@ -27,7 +27,7 @@ pgvector = { version = "0.4", features = ["sqlx"] }
 # Redis
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager", "streams"] }
 bb8 = "0.8"
-bb8-redis = "0.17"
+bb8-redis = "0.20"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

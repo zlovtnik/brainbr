@@ -50,7 +50,11 @@ const sig = signer.sign(privateKey, 'base64url');
 const jwt = `${sigInput}.${sig}`;
 
 // ── Seed DB company ───────────────────────────────────────────────────────────
-const sql = `INSERT INTO companies (id, external_tenant_id, name) VALUES ('${TENANT_ID}', '${TENANT_ID}', '${COMPANY_NAME}') ON CONFLICT (id) DO NOTHING;`;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+if (!UUID_RE.test(TENANT_ID)) throw new Error(`TENANT_ID is not a valid UUID: ${TENANT_ID}`);
+const safeName = COMPANY_NAME.replace(/[^A-Za-z0-9 _\-]/g, '');
+if (!safeName) throw new Error('COMPANY_NAME contains no safe characters');
+const sql = `INSERT INTO companies (id, name, cnpj) VALUES ('${TENANT_ID}', '${safeName}', '00.000.000/0001-00') ON CONFLICT (id) DO NOTHING;`;
 try {
   execSync(`docker exec fiscalbrain_db psql -U fiscal_user -d fiscalbrain -c "${sql}"`, { stdio: 'pipe' });
   console.log(`✔  Company seeded (id=${TENANT_ID})`);

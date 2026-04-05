@@ -147,7 +147,9 @@ BEGIN
         IF NEW.id <> OLD.id OR NEW.company_id <> OLD.company_id OR NEW.sku_id <> OLD.sku_id
             OR NEW.event_type <> OLD.event_type OR NEW.amount <> OLD.amount
             OR NEW.currency <> OLD.currency OR NEW.idempotency_key <> OLD.idempotency_key
-            OR NEW.event_timestamp <> OLD.event_timestamp OR NEW.created_at <> OLD.created_at THEN
+            OR NEW.created_at <> OLD.created_at
+            OR NEW.event_payload <> OLD.event_payload
+            OR NEW.request_id IS DISTINCT FROM OLD.request_id THEN
             RAISE EXCEPTION 'split_payment_events only allows updating integration_status and integration_metadata';
         END IF;
         RETURN NEW;

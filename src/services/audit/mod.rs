@@ -93,8 +93,9 @@ impl AuditService {
         let origin_state: String = sku.get("origin_state");
         let destination_state: String = sku.get("destination_state");
         let legacy_taxes: serde_json::Value = sku.get("legacy_taxes");
+        tx.commit().await?;
 
-        // 2. RAG: embed → retrieve → LLM → validate
+        // 2. RAG: embed → retrieve → LLM → validate (runs outside the write tx)
         let rag = RagService::audit(pool, cfg, job.company_id, &ncm_code, &description, &origin_state, &destination_state).await?;
 
         // 3. Compute risk score
@@ -136,7 +137,8 @@ impl AuditService {
             hex::encode(Sha256::digest(raw.as_bytes()))
         };
 
-        // 5. Persist — all in one transaction with RLS (tx already open from step 1)
+        // 5. Persist — open a fresh write transaction with RLS
+        let mut tx = pool.begin().await?;
         set_rls_session(&mut tx, job.company_id).await.map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
         // Insert explainability run

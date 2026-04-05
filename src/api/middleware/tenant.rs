@@ -25,6 +25,7 @@ pub async fn tenant_middleware(
             || path.starts_with("/api/v1/audit")
             || path.starts_with("/api/v1/split-payment")
             || path.starts_with("/api/v1/ingestion")
+            || path.starts_with("/api/v1/transition/sku/")
     };
 
     if let Some(claims) = req.extensions().get::<AuthenticatedClaims>().cloned() {
@@ -62,15 +63,7 @@ async fn resolve_tenant(pool: &PgPool, claim: &str) -> Option<Uuid> {
             .flatten();
         return row.map(|(id,)| id);
     }
-    // Otherwise look up by external_tenant_id
-    let row: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM companies WHERE external_tenant_id = $1")
-        .bind(claim)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| tracing::error!("Failed to resolve tenant by external ID: {e}"))
-        .ok()
-        .flatten();
-    row.map(|(id,)| id)
+    None
 }
 
 pub async fn set_rls_session(

@@ -19,7 +19,7 @@ impl std::fmt::Debug for AppConfig {
         f.debug_struct("AppConfig")
             .field("database_url", &redact_db_url(&self.database_url))
             .field("db_pool_max", &self.db_pool_max)
-            .field("redis_url", &self.redis_url)
+            .field("redis_url", &redact_db_url(&self.redis_url))
             .field("models", &self.models)
             .field("queue", &self.queue)
             .field("worker", &self.worker)

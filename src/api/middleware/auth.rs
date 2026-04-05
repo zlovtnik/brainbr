@@ -91,9 +91,32 @@ impl JwksState {
 
         let kid = header.kid.as_deref().unwrap_or("");
         let keys = jwks["keys"].as_array().ok_or_else(|| anyhow::anyhow!("Invalid JWKS: missing 'keys' array"))?;
-        let key_json = keys.iter()
-            .find(|k| k["kid"].as_str().unwrap_or("") == kid || kid.is_empty())
-            .ok_or_else(|| anyhow::anyhow!("No matching JWK found for kid={kid}"))?;
+
+        // If kid is present, require an exact match. If absent, try all keys.
+        let key_json = if !kid.is_empty() {
+            keys.iter()
+                .find(|k| k["kid"].as_str().unwrap_or("") == kid)
+                .ok_or_else(|| anyhow::anyhow!("No matching JWK found for kid={kid}"))?
+        } else {
+            // No kid in header — attempt verification with each key in order.
+            let mut matched = None;
+            for key in keys {
+                let n = key["n"].as_str().filter(|s| !s.is_empty());
+                let e = key["e"].as_str().filter(|s| !s.is_empty());
+                if let (Some(n), Some(e)) = (n, e) {
+                    if let Ok(dk) = DecodingKey::from_rsa_components(n, e) {
+                        let mut v = Validation::new(Algorithm::RS256);
+                        v.validate_aud = false;
+                        if let Some(iss) = &self.issuer_uri { v.set_issuer(&[iss.as_str()]); }
+                        if decode::<Value>(token, &dk, &v).is_ok() {
+                            matched = Some(key);
+                            break;
+                        }
+                    }
+                }
+            }
+            matched.ok_or_else(|| anyhow::anyhow!("No JWK verified the token signature"))?
+        };
 
         let n = key_json["n"].as_str()
             .filter(|s| !s.is_empty())

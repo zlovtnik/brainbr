@@ -24,13 +24,17 @@ export const load: PageServerLoad = async ({ fetch }) => {
 	try {
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 3000);
-		const response = await fetch(`${apiBaseUrl}/api/v1/platform/info`, {
-			headers: {
-				accept: 'application/json'
-			},
-			signal: controller.signal
-		});
-		clearTimeout(timeoutId);
+		let response: Response;
+		try {
+			response = await fetch(`${apiBaseUrl}/api/v1/platform/info`, {
+				headers: {
+					accept: 'application/json'
+				},
+				signal: controller.signal
+			});
+		} finally {
+			clearTimeout(timeoutId);
+		}
 
 		if (!response.ok) {
 			return {

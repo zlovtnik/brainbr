@@ -137,7 +137,6 @@
 	color: var(--text);
 	border: 1px solid var(--border-strong);
 	z-index: 9999;
-	clip: rect(0 0 0 0);
 	clip-path: inset(50%);
 	white-space: nowrap;
 	overflow: hidden;

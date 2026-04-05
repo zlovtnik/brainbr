@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use crate::config::AppConfig;
 use middleware::auth::{auth_middleware, JwksState};
+use middleware::error::request_id_middleware;
 use middleware::tenant::tenant_middleware;
 use routes::health::HealthRegistry;
 
@@ -52,7 +53,8 @@ pub fn build_router(pool: Arc<PgPool>, config: Arc<AppConfig>) -> Router {
         .route("/api/v1/ingestion/jobs", post(routes::ingestion::create_job))
         .with_state(state)
         .layer(axum_middleware::from_fn_with_state(pool.clone(), tenant_middleware))
-        .layer(axum_middleware::from_fn_with_state(jwks, auth_middleware));
+        .layer(axum_middleware::from_fn_with_state(jwks, auth_middleware))
+        .layer(axum_middleware::from_fn(request_id_middleware));
 
     public.merge(protected)
 }

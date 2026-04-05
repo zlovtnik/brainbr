@@ -179,15 +179,16 @@ impl InventoryService {
                    origin_state = COALESCE($3, origin_state),
                    destination_state = COALESCE($4, destination_state),
                    legacy_taxes = COALESCE($5::jsonb, legacy_taxes),
-                   is_active = TRUE,
+                   is_active = COALESCE($6::boolean, is_active),
                    updated_at = NOW()
-               WHERE sku_id = $6 AND company_id = $7"#
+               WHERE sku_id = $7 AND company_id = $8"#
         )
         .bind(body["description"].as_str())
         .bind(body["ncm_code"].as_str())
         .bind(body["origin_state"].as_str())
         .bind(body["destination_state"].as_str())
         .bind(body.get("legacy_taxes").filter(|v| !v.is_null()).cloned())
+        .bind(body["is_active"].as_bool())
         .bind(sku_id).bind(company_id)
         .execute(&mut *tx).await?.rows_affected();
 

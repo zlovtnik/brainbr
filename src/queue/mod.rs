@@ -102,7 +102,13 @@ impl RedisQueueClient {
                                 }
                             }
                             if !payload_found {
-                                tracing::warn!(message_id = %id, "Message missing 'payload' field");
+                                tracing::warn!(message_id = %id, "Message missing 'payload' field — acknowledging to remove from PEL");
+                                let _ = redis::cmd("XACK")
+                                    .arg(stream)
+                                    .arg(group)
+                                    .arg(&id)
+                                    .query_async::<()>(&mut self.conn)
+                                    .await;
                             }
                         }
                     }
