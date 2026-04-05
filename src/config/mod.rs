@@ -37,6 +37,7 @@ pub struct ModelsConfig {
     pub openai_base_url: String,
     pub openai_api_key: String,
     pub provider_mode: String,
+    pub audit_min_confidence: f64,
 }
 
 impl std::fmt::Debug for ModelsConfig {
@@ -47,6 +48,7 @@ impl std::fmt::Debug for ModelsConfig {
             .field("openai_base_url", &self.openai_base_url)
             .field("openai_api_key", &"[REDACTED]")
             .field("provider_mode", &self.provider_mode)
+            .field("audit_min_confidence", &self.audit_min_confidence)
             .finish()
     }
 }
@@ -70,6 +72,12 @@ pub struct WorkerConfig {
     pub ingestion_poll_interval_ms: u64,
     pub audit_poll_interval_ms: u64,
     pub transition_refresh_interval_ms: u64,
+    /// How often (ms) the worker scans for stale shared legislation to re-ingest.
+    /// Default: 86_400_000 (24 h). Set to 0 to disable.
+    pub reingest_interval_ms: u64,
+    /// Re-ingest shared KB rows not updated within this many milliseconds.
+    /// Default: 604_800_000 (7 days).
+    pub reingest_staleness_ms: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +86,7 @@ pub struct SecurityConfig {
     pub jwt_jwk_set_uri: Option<String>,
     pub jwt_tenant_claim: String,
     pub jwt_enabled: bool,
+    pub jwt_audience: Option<String>,
     pub bypass_rls_enabled: bool,
     pub dev_tenant_id: Option<String>,
 }
@@ -94,6 +103,9 @@ impl AppConfig {
                 openai_base_url: optional("APP_PROVIDERS_OPENAI_BASE_URL", "https://api.openai.com/v1"),
                 openai_api_key: optional("APP_PROVIDERS_OPENAI_API_KEY", ""),
                 provider_mode: optional("MODEL_PROVIDER_MODE", "real"),
+                audit_min_confidence: optional("AUDIT_MIN_CONFIDENCE", "0.5")
+                    .parse()
+                    .context("AUDIT_MIN_CONFIDENCE must be a float between 0 and 1")?,
             },
             queue: QueueConfig {
                 stream_ingestion: optional("APP_QUEUE_STREAM_INGESTION", "queue_ingestion"),
@@ -111,12 +123,15 @@ impl AppConfig {
                 ingestion_poll_interval_ms: optional("WORKER_INGESTION_POLL_INTERVAL_MS", "2000").parse().context("WORKER_INGESTION_POLL_INTERVAL_MS must be a number")?,
                 audit_poll_interval_ms: optional("WORKER_AUDIT_POLL_INTERVAL_MS", "2000").parse().context("WORKER_AUDIT_POLL_INTERVAL_MS must be a number")?,
                 transition_refresh_interval_ms: optional("WORKER_TRANSITION_REFRESH_INTERVAL_MS", "3600000").parse().context("WORKER_TRANSITION_REFRESH_INTERVAL_MS must be a number")?,
+                reingest_interval_ms: optional("WORKER_REINGEST_INTERVAL_MS", "86400000").parse().context("WORKER_REINGEST_INTERVAL_MS must be a number")?,
+                reingest_staleness_ms: optional("WORKER_REINGEST_STALENESS_MS", "604800000").parse().context("WORKER_REINGEST_STALENESS_MS must be a number")?,
             },
             security: SecurityConfig {
                 jwt_issuer_uri: env::var("APP_SECURITY_JWT_ISSUER_URI").ok().filter(|s| !s.is_empty()),
                 jwt_jwk_set_uri: env::var("APP_SECURITY_JWT_JWK_SET_URI").ok().filter(|s| !s.is_empty()),
                 jwt_tenant_claim: optional("APP_SECURITY_JWT_TENANT_CLAIM", "tenant_id"),
                 jwt_enabled: optional("APP_SECURITY_JWT_ENABLED", "true").parse().context("APP_SECURITY_JWT_ENABLED must be true/false")?,
+                jwt_audience: env::var("APP_SECURITY_JWT_AUDIENCE").ok().filter(|s| !s.is_empty()),
                 bypass_rls_enabled: optional("APP_BYPASS_RLS_ENABLED", "false").parse().context("APP_BYPASS_RLS_ENABLED must be true/false")?,
                 dev_tenant_id: env::var("APP_DEV_TENANT_ID").ok().filter(|s| !s.is_empty()),
             },

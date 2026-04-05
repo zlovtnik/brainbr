@@ -32,8 +32,12 @@ pub struct JwksState {
     pub tenant_claim: String,
     pub enabled: bool,
     pub dev_tenant_id: Option<String>,
+    pub audience: Option<String>,
     client: reqwest::Client,
     cache: RwLock<Option<JwksCache>>,
+    /// Caches the resolved JWKS URL after first OIDC discovery so we don't
+    /// re-fetch openid-configuration on every request.
+    resolved_jwks_url: RwLock<Option<String>>,
 }
 
 // Manual Clone: RwLock<Option<JwksCache>> is not Clone, so we share via Arc instead.
@@ -47,11 +51,13 @@ impl JwksState {
             tenant_claim: config.jwt_tenant_claim.clone(),
             enabled: config.jwt_enabled,
             dev_tenant_id: config.dev_tenant_id.clone(),
+            audience: config.jwt_audience.clone(),
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
                 .build()
                 .expect("Failed to build HTTP client"),
             cache: RwLock::new(None),
+            resolved_jwks_url: RwLock::new(None),
         }
     }
 
@@ -65,25 +71,52 @@ impl JwksState {
                 }
             }
         }
-        // Slow path: refresh
-        let jwks: Value = self.client.get(jwks_url).send().await?.json().await?;
+        // Slow path: refresh — check HTTP status before parsing to avoid caching error payloads
+        let resp = self.client.get(jwks_url).send().await?.error_for_status()?;
+        let jwks: Value = resp.json().await?;
+        // Validate JWKS shape: must have a top-level "keys" array with at least one object
+        let keys = jwks["keys"].as_array()
+            .filter(|a| !a.is_empty() && a.iter().all(|k| k["kty"].is_string()))
+            .ok_or_else(|| anyhow::anyhow!("Invalid JWKS: missing or empty 'keys' array"))?;
+        let _ = keys; // shape validated
         let mut guard = self.cache.write().await;
         *guard = Some(JwksCache {
             value: jwks.clone(),
-            expires_at: Instant::now() + Duration::from_secs(300), // 5-minute TTL
+            expires_at: Instant::now() + Duration::from_secs(300),
         });
         Ok(jwks)
     }
 
     pub async fn validate_token(&self, token: &str) -> anyhow::Result<AuthenticatedClaims> {
-        let jwks_uri = self.jwks_uri.as_deref()
-            .or(self.issuer_uri.as_deref())
-            .ok_or_else(|| anyhow::anyhow!("No JWT source configured"))?;
-
-        let jwks_url = if self.jwks_uri.is_some() {
-            jwks_uri.to_string()
+        // Resolve JWKS URL once: prefer explicit jwks_uri (validated https), then
+        // OIDC discovery (cached after first successful fetch).
+        let jwks_url = if let Some(uri) = &self.jwks_uri {
+            if !uri.starts_with("https://") {
+                return Err(anyhow::anyhow!("jwt_jwk_set_uri must be an https URL: {uri}"));
+            }
+            uri.clone()
+        } else if let Some(issuer) = &self.issuer_uri {
+            // Fast path: return cached discovered URL
+            {
+                let guard = self.resolved_jwks_url.read().await;
+                if let Some(ref url) = *guard {
+                    url.clone()
+                } else {
+                    drop(guard);
+                    let discovery_url = format!("{}/.well-known/openid-configuration", issuer.trim_end_matches('/'));
+                    let config: Value = self.client.get(&discovery_url).send().await?.error_for_status()?.json().await?;
+                    let discovered = config["jwks_uri"].as_str()
+                        .ok_or_else(|| anyhow::anyhow!("OIDC discovery response missing 'jwks_uri'"))?
+                        .to_string();
+                    if !discovered.starts_with("https://") {
+                        return Err(anyhow::anyhow!("Discovered jwks_uri is not an https URL: {discovered}"));
+                    }
+                    *self.resolved_jwks_url.write().await = Some(discovered.clone());
+                    discovered
+                }
+            }
         } else {
-            format!("{}/.well-known/jwks.json", jwks_uri.trim_end_matches('/'))
+            return Err(anyhow::anyhow!("No JWT source configured: set APP_SECURITY_JWT_JWK_SET_URI or APP_SECURITY_JWT_ISSUER_URI"));
         };
 
         let jwks = self.fetch_jwks(&jwks_url).await?;
@@ -106,7 +139,7 @@ impl JwksState {
                 if let (Some(n), Some(e)) = (n, e) {
                     if let Ok(dk) = DecodingKey::from_rsa_components(n, e) {
                         let mut v = Validation::new(Algorithm::RS256);
-                        v.validate_aud = false;
+                        if let Some(aud) = &self.audience { v.set_audience(&[aud.as_str()]); } else { v.validate_aud = false; }
                         if let Some(iss) = &self.issuer_uri { v.set_issuer(&[iss.as_str()]); }
                         if decode::<Value>(token, &dk, &v).is_ok() {
                             matched = Some(key);
@@ -128,7 +161,7 @@ impl JwksState {
         let decoding_key = DecodingKey::from_rsa_components(n, e)?;
 
         let mut validation = Validation::new(Algorithm::RS256);
-        validation.validate_aud = false; // audience not required unless explicitly configured
+        if let Some(aud) = &self.audience { validation.set_audience(&[aud.as_str()]); } else { validation.validate_aud = false; }
         if let Some(iss) = &self.issuer_uri {
             validation.set_issuer(&[iss.as_str()]);
         }
@@ -140,7 +173,11 @@ impl JwksState {
         let scopes = claims["scope"].as_str()
             .map(|s| s.split_whitespace().map(String::from).collect())
             .unwrap_or_default();
-        let sub = claims["sub"].as_str().unwrap_or("").to_string();
+        let sub = claims.get("sub")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("Invalid token: missing or empty 'sub' claim"))?
+            .to_string();
 
         Ok(AuthenticatedClaims { sub, tenant_claim, scopes, raw: claims })
     }

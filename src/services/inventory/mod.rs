@@ -156,10 +156,10 @@ impl InventoryService {
                RETURNING (xmax = 0) AS created"#
         )
         .bind(&sku_id).bind(company_id)
-        .bind(body["description"].as_str().unwrap_or(""))
-        .bind(body["ncm_code"].as_str().unwrap_or(""))
-        .bind(body["origin_state"].as_str().unwrap_or(""))
-        .bind(body["destination_state"].as_str().unwrap_or(""))
+        .bind(body["description"].as_str())
+        .bind(body["ncm_code"].as_str())
+        .bind(body["origin_state"].as_str())
+        .bind(body["destination_state"].as_str())
         .bind(legacy_taxes)
         .fetch_one(&mut *tx).await?;
 
@@ -197,7 +197,7 @@ impl InventoryService {
         Ok(InventoryWriteResult { sku_id: sku_id.into(), status: "updated".into() })
     }
 
-    pub async fn delete(pool: &PgPool, company_id: Uuid, sku_id: &str) -> Result<serde_json::Value, AppError> {
+    pub async fn delete(pool: &PgPool, company_id: Uuid, sku_id: &str) -> Result<InventoryWriteResult, AppError> {
         let mut tx = pool.begin().await?;
         set_rls_session(&mut tx, company_id).await.map_err(AppError::Database)?;
 
@@ -209,7 +209,7 @@ impl InventoryService {
 
         tx.commit().await?;
         if rows == 0 { return Err(AppError::NotFound(format!("SKU {sku_id} not found"))); }
-        Ok(serde_json::json!({ "sku_id": sku_id, "status": "deleted" }))
+        Ok(InventoryWriteResult { sku_id: sku_id.into(), status: "deleted".into() })
     }
 }
 

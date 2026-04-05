@@ -21,7 +21,7 @@
 	}
 </script>
 
-<form action="?/default" method="POST" novalidate use:handleEnhance>
+<form action="?/submit" method="POST" novalidate use:handleEnhance>
 	<InventoryEditor
 		cancelHref={`/inventory/${encodeURIComponent(data.item.skuId)}`}
 		description="Update the SKU record and keep the fiscal catalog current."

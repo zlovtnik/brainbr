@@ -53,11 +53,10 @@
 - ✅ `RATE_GENERATED` audit event emitted with `run_id` linkage
 - ✅ `AuditService::query` — semantic search endpoint wired to vector search
 - ✅ Mock provider mode (`MODEL_PROVIDER_MODE=mock`) for local dev without OpenAI key
-- 🔄 **[CRITICAL] Prompt injection mitigation** — sanitise all user-supplied inputs before prompt composition; acceptance criteria: `sanitize_input` applied to all RAG prompt parameters, fuzz tests pass, no control chars or brace injection possible
+- 🔄 **[CRITICAL] Prompt injection mitigation** — sanitize all user-supplied inputs before prompt composition; acceptance criteria: `sanitize_input` applied to all RAG prompt parameters, fuzz tests pass, no control chars or brace injection possible
 - 🔄 **[CRITICAL] PII redaction before prompt and log persistence** — strip CPF/CNPJ/email/phone from `description`, `replay_context`, and `rag_output` before storage; acceptance criteria: PII redaction pipeline in place, integration test confirms no PII in persisted artifacts
 - 🔄 **[CRITICAL] Harmful-content / refusal detection on LLM response** — detect and reject refusal or off-topic LLM output before persisting; acceptance criteria: refusal patterns matched, job routed to DLQ with `AUDIT_REFUSAL` event
-- ⬜ Legacy tax extraction from legislation via RAG (currently manual field)
-- 🔄 **[CRITICAL] Confidence threshold gate** — configurable minimum confidence (`AUDIT_MIN_CONFIDENCE`); route low-confidence jobs to DLQ with `AUDIT_LOW_CONFIDENCE` event; acceptance criteria: threshold enforced in `process_audit_job`, DLQ routing tested
+- ✅ **[CRITICAL] Confidence threshold gate** — configurable minimum confidence (`AUDIT_MIN_CONFIDENCE`); route low-confidence jobs to DLQ with `AUDIT_LOW_CONFIDENCE` event; `NonRetryable` sentinel bypasses retry budget; threshold enforced in `process_audit_job`
 
 ## Epic 5 — API Surface
 - ✅ `GET /api/v1/inventory/sku` — paginated list with search and sort
@@ -127,11 +126,11 @@
 1. 🔄 **[CRITICAL] Prompt injection mitigation** — strip/escape user-supplied text before prompt composition ← already partially implemented in `sanitize_input`
 2. 🔄 **[CRITICAL] PII redaction pipeline** — redact CPF/CNPJ/email before prompt and log persistence
 3. 🔄 **[CRITICAL] Harmful-content / refusal detection** — detect LLM refusals and route to DLQ with `AUDIT_REFUSAL` event
-4. 🔄 **[CRITICAL] Confidence threshold gate** — configurable minimum confidence; route low-confidence jobs to DLQ with `AUDIT_LOW_CONFIDENCE` event
+4. ✅ **[CRITICAL] Confidence threshold gate** — configurable minimum confidence; route low-confidence jobs to DLQ with `AUDIT_LOW_CONFIDENCE` event
 5. 🔄 **[CRITICAL] Data retention / deletion policy (LGPD/GDPR)** — retention timelines, deletion workflows, and automation for all tenant-owned tables
 6. 🔄 **[CRITICAL] Encryption-at-rest verification** — validate `reform_taxes` and `rag_output` column encryption, key management, and access controls
 7. ⬜ **Automated legislation scraper** — crawl CONFAZ, Receita Federal, SEFAZ-SP/RJ/MG portals; tag with `state` + `ncm_scope` in metadata
-8. ⬜ **`GET /fiscal-impact/dashboard`** — expose `mv_fiscal_impact` via API
+8. ⬜ **`GET /api/v1/fiscal-impact/dashboard`** — expose `mv_fiscal_impact` via API
 9. ⬜ **Integration test suite** — ingestion → embed → RAG audit → forecast round-trip with mock provider
 10. ⬜ **Legacy tax RAG extraction** — extend audit prompt to also return `legacy_taxes` fields from legislation
 11. ⬜ **OpenAPI spec sync** — update `docs/openapi.yaml` with forecast, query, and ingestion routes

@@ -1,7 +1,7 @@
 use redis::{aio::ConnectionManager, RedisResult};
 use serde::Serialize;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct RedisQueueClient {
     conn: ConnectionManager,
     pub ingestion_stream: String,
@@ -41,6 +41,9 @@ impl RedisQueueClient {
                 .query_async(&mut self.conn)
                 .await;
             if let Err(e) = result {
+                // redis-rs does not expose structured Redis error codes, so we detect
+                // BUSYGROUP (consumer group already exists) via substring match on the
+                // error string. This is a known workaround. Treat BUSYGROUP as non-fatal.
                 if !e.to_string().contains("BUSYGROUP") {
                     return Err(e.into());
                 }

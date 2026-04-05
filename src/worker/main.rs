@@ -4,7 +4,7 @@ use fiscalbrain_br::{
     queue::RedisQueueClient,
     services::{
         audit::AuditService,
-        pipeline::{AuditJob, IngestionJob, IngestionService},
+        pipeline::{AuditJob, IngestionJob, IngestionService, NonRetryable, ReingestionService},
     },
 };
 use serde::de::DeserializeOwned;
@@ -92,6 +92,31 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    let pool_reingest = pool.clone();
+    let mut queue_reingest = queue.clone();
+    let mut shutdown_reingest = shutdown_tx.subscribe();
+    let reingest_ms = cfg.worker.reingest_interval_ms;
+    let staleness_ms = cfg.worker.reingest_staleness_ms;
+    let ingestion_stream = queue.ingestion_stream.clone();
+    let reingest_handle = tokio::spawn(async move {
+        if reingest_ms == 0 {
+            tracing::info!("Re-ingestion scheduler disabled (WORKER_REINGEST_INTERVAL_MS=0)");
+            return;
+        }
+        loop {
+            tokio::select! {
+                _ = shutdown_reingest.recv() => { tracing::info!("Re-ingestion scheduler shutting down"); break; }
+                _ = tokio::time::sleep(Duration::from_millis(reingest_ms)) => {
+                    match ReingestionService::enqueue_stale(&pool_reingest, &mut queue_reingest, staleness_ms, &ingestion_stream).await {
+                        Ok(Some(n)) => tracing::info!(enqueued = n, "Re-ingestion scan complete"),
+                        Ok(None) => tracing::debug!("Re-ingestion scan skipped (lock held by another worker)"),
+                        Err(e) => tracing::error!("Re-ingestion scan failed: {e}"),
+                    }
+                }
+            }
+        }
+    });
+
     let heartbeat_ms = cfg.worker.heartbeat_interval_ms;
     let mut shutdown_hb = shutdown_tx.subscribe();
     let heartbeat_handle = tokio::spawn(async move {
@@ -103,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    tokio::try_join!(audit_handle, ingestion_handle, refresh_handle, heartbeat_handle)?;
+    tokio::try_join!(audit_handle, ingestion_handle, refresh_handle, reingest_handle, heartbeat_handle)?;
     Ok(())
 }
 
@@ -148,6 +173,16 @@ async fn run_worker<J, F, Fut>(
                                     }
                                 }
                                 Err(e) => {
+                                    // Non-retryable errors (e.g. confidence gate) go straight to DLQ
+                                    if e.downcast_ref::<NonRetryable>().is_some() {
+                                        tracing::error!(stream, id, "Non-retryable error, routing to DLQ immediately: {e}");
+                                        retry_counts.lock().await.remove(&id);
+                                        match queue.move_to_dlq(&dlq, &payload).await {
+                                            Ok(_) => { let _ = queue.acknowledge(&stream, &group, &id).await; }
+                                            Err(dlq_err) => tracing::error!(stream, "DLQ write failed: {dlq_err}"),
+                                        }
+                                        continue;
+                                    }
                                     let attempt = {
                                         let mut counts = retry_counts.lock().await;
                                         let n = counts.entry(id.clone()).or_insert(0);

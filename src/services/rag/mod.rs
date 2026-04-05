@@ -190,7 +190,7 @@ impl RagService {
 
         let top_score = chunks[0].score;
         let context = chunks.iter().enumerate()
-            .map(|(i, c)| format!("[{}] {} ({})\n{}", i + 1, c.law_ref, c.source_url, c.content))
+            .map(|(i, c)| format!("[{}] {} ({})\n{}", i + 1, sanitize_input(&c.law_ref), sanitize_input(&c.source_url), sanitize_context(&c.content)))
             .collect::<Vec<_>>().join("\n\n---\n\n");
 
         let prompt = build_prompt(ncm_code, description, origin_state, destination_state, &context);
@@ -215,10 +215,23 @@ fn sanitize_input(s: &str) -> String {
     s.chars()
         .filter(|c| !matches!(c, '\x00'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\x7f'))
         .map(|c| match c {
-            '{' => '(', '}' => ')', '"' => '\'' , '\n' | '\r' => ' ',
+            '{' => '(', '}' => ')', '"' => '\'', '\n' | '\r' => ' ',
             c => c,
         })
         .take(500)
+        .collect()
+}
+
+/// Like `sanitize_input` but preserves newlines (legislation context is multi-line)
+/// and has a higher char limit. Still strips control chars and brace injection.
+fn sanitize_context(s: &str) -> String {
+    s.chars()
+        .filter(|c| !matches!(c, '\x00'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\x7f'))
+        .map(|c| match c {
+            '{' => '(', '}' => ')', '"' => '\'',
+            c => c,
+        })
+        .take(4000)
         .collect()
 }
 
@@ -314,4 +327,117 @@ fn validate_reform_taxes(v: &Value) -> anyhow::Result<Value> {
 fn to_vector_literal(values: &[f32]) -> String {
     let inner = values.iter().map(|v| format!("{v:.8}")).collect::<Vec<_>>().join(",");
     format!("[{inner}]")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // ── deterministic unit tests ──────────────────────────────────────────────
+
+    #[test]
+    fn strips_null_bytes() {
+        assert!(!sanitize_input("foo\x00bar").contains('\x00'));
+    }
+
+    #[test]
+    fn replaces_braces() {
+        let out = sanitize_input("{\"inject\": \"payload\"}");
+        assert!(!out.contains('{'));
+        assert!(!out.contains('}'));
+        assert!(!out.contains('"'));
+    }
+
+    #[test]
+    fn collapses_newlines_in_input() {
+        let out = sanitize_input("line1\nline2\r\nline3");
+        assert!(!out.contains('\n'));
+        assert!(!out.contains('\r'));
+    }
+
+    #[test]
+    fn context_preserves_newlines_but_strips_braces() {
+        let out = sanitize_context("Art. 1\n{inject}\nArt. 2");
+        assert!(out.contains('\n'));
+        assert!(!out.contains('{'));
+        assert!(!out.contains('}'));
+    }
+
+    #[test]
+    fn truncates_at_limit() {
+        let long = "a".repeat(1000);
+        assert_eq!(sanitize_input(&long).len(), 500);
+        let long_ctx = "a".repeat(5000);
+        assert_eq!(sanitize_context(&long_ctx).len(), 4000);
+    }
+
+    #[test]
+    fn build_prompt_no_raw_braces_in_user_fields() {
+        let prompt = build_prompt(
+            "9999.99{inject}",
+            "desc} evil {payload",
+            "SP{x}",
+            "RJ\x01",
+            "Art. 1\nlegislação normal",
+        );
+        // The JSON template braces in the prompt are expected; only user-field
+        // injections must be absent. Check the user-data lines specifically.
+        let produto_line = prompt.lines().find(|l| l.starts_with("Produto:")).unwrap();
+        let operacao_line = prompt.lines().find(|l| l.starts_with("Operação:")).unwrap();
+        assert!(!produto_line.contains('{'));
+        assert!(!produto_line.contains('}'));
+        assert!(!operacao_line.contains('{'));
+        assert!(!operacao_line.contains('}'));
+    }
+
+    // ── proptest fuzz ─────────────────────────────────────────────────────────
+
+    proptest! {
+        #[test]
+        fn fuzz_sanitize_input_no_control_chars(s in ".*") {
+            let out = sanitize_input(&s);
+            prop_assert!(out.len() <= 500);
+            let has_control = out.chars().any(|c| matches!(c,
+                '\x00'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\x7f'
+            ));
+            prop_assert!(!has_control);
+            let has_open_brace = out.contains('{');
+            let has_close_brace = out.contains('}');
+            let has_dquote = out.contains('"');
+            prop_assert!(!has_open_brace);
+            prop_assert!(!has_close_brace);
+            prop_assert!(!has_dquote);
+        }
+
+        #[test]
+        fn fuzz_sanitize_context_no_control_chars(s in ".*") {
+            let out = sanitize_context(&s);
+            prop_assert!(out.len() <= 4000);
+            let has_control = out.chars().any(|c| matches!(c,
+                '\x00'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\x7f'
+            ));
+            prop_assert!(!has_control);
+            let has_open_brace = out.contains('{');
+            let has_close_brace = out.contains('}');
+            prop_assert!(!has_open_brace);
+            prop_assert!(!has_close_brace);
+        }
+
+        #[test]
+        fn fuzz_build_prompt_user_fields_clean(
+            ncm in "[0-9A-Za-z.{}\"\x00-\x1f]{0,20}",
+            desc in ".{0,100}",
+            origin in ".{0,10}",
+            dest in ".{0,10}",
+        ) {
+            let prompt = build_prompt(&ncm, &desc, &origin, &dest, "legislação");
+            let produto = prompt.lines().find(|l| l.starts_with("Produto:")).unwrap_or("");
+            let operacao = prompt.lines().find(|l| l.starts_with("Operação:")).unwrap_or("");
+            let produto_clean = !produto.contains('{') && !produto.contains('}');
+            let operacao_clean = !operacao.contains('{') && !operacao.contains('}');
+            prop_assert!(produto_clean);
+            prop_assert!(operacao_clean);
+        }
+    }
 }

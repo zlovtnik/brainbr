@@ -31,7 +31,7 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-	default: async (event) => {
+	submit: async (event) => {
 		requireSession(event);
 
 		const formData = await event.request.formData();

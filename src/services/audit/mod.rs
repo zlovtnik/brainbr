@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::api::middleware::error::AppError;
 use crate::api::middleware::tenant::set_rls_session;
 use crate::config::ModelsConfig;
+use crate::services::pipeline::NonRetryable;
 use crate::services::rag::RagService;
 use crate::services::transition::math::compute_risk_score;
 
@@ -97,6 +98,39 @@ impl AuditService {
 
         // 2. RAG: embed → retrieve → LLM → validate (runs outside the write tx)
         let rag = RagService::audit(pool, cfg, job.company_id, &ncm_code, &description, &origin_state, &destination_state).await?;
+
+        // 2a. Confidence threshold gate
+        if rag.audit_confidence < cfg.audit_min_confidence {
+            let mut tx = pool.begin().await?;
+            set_rls_session(&mut tx, job.company_id).await.map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            sqlx::query(
+                r#"INSERT INTO fiscal_audit_log
+                   (company_id, sku_id, event_type, actor, request_id, event_payload)
+                   VALUES ($1,$2,'AUDIT_LOW_CONFIDENCE','worker',$3,$4::jsonb)"#,
+            )
+            .bind(job.company_id)
+            .bind(&job.sku_id)
+            .bind(&job.request_id)
+            .bind(serde_json::json!({
+                "job_id": job.job_id,
+                "ncm_code": ncm_code,
+                "audit_confidence": rag.audit_confidence,
+                "min_confidence": cfg.audit_min_confidence,
+            }))
+            .execute(&mut *tx)
+            .await?;
+            tx.commit().await?;
+            tracing::warn!(
+                sku_id = %job.sku_id,
+                confidence = %rag.audit_confidence,
+                threshold = %cfg.audit_min_confidence,
+                "Audit confidence below threshold — routing to DLQ"
+            );
+            return Err(anyhow::Error::new(NonRetryable(format!(
+                "confidence {:.4} below threshold {:.4}",
+                rag.audit_confidence, cfg.audit_min_confidence
+            ))));
+        }
 
         // 3. Compute risk score
         let legacy_sum: f64 = legacy_taxes.as_object()

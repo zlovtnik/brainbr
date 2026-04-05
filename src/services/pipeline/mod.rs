@@ -8,6 +8,92 @@ use crate::api::middleware::error::AppError;
 use crate::config::ModelsConfig;
 use crate::services::rag::RagService;
 
+/// Valid Brazilian state abbreviations (UF).
+const VALID_UF: &[&str] = &[
+    "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA",
+    "MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN",
+    "RS","RO","RR","SC","SP","SE","TO",
+];
+
+/// Validated metadata extracted from an ingestion request body.
+#[derive(Debug, Clone, Default)]
+pub struct IngestionMetadata {
+    /// Optional Brazilian state (UF) this legislation applies to.
+    pub state: Option<String>,
+    /// Optional list of NCM chapter/heading prefixes (e.g. `["22", "2203"]`).
+    pub ncm_scope: Vec<String>,
+    /// Free-form tags.
+    pub tags: Vec<String>,
+}
+
+impl IngestionMetadata {
+    /// Parse and validate `state`, `ncm_scope`, and `tags` from a JSON body.
+    pub fn from_body(body: &serde_json::Value) -> Result<Self, AppError> {
+        let state = match body["state"].as_str() {
+            None | Some("") => None,
+            Some(s) => {
+                let upper = s.to_uppercase();
+                if !VALID_UF.contains(&upper.as_str()) {
+                    return Err(AppError::BadRequest(format!(
+                        "state '{}' is not a valid Brazilian UF", s
+                    )));
+                }
+                Some(upper)
+            }
+        };
+
+        let ncm_scope = match body["ncm_scope"].as_array() {
+            None => vec![],
+            Some(arr) => {
+                let mut out = Vec::with_capacity(arr.len());
+                for v in arr {
+                    let prefix = v.as_str().ok_or_else(|| {
+                        AppError::BadRequest("ncm_scope entries must be strings".into())
+                    })?;
+                    if prefix.is_empty() || !prefix.chars().all(|c| c.is_ascii_digit()) {
+                        return Err(AppError::BadRequest(format!(
+                            "ncm_scope entry '{}' must be a non-empty numeric string", prefix
+                        )));
+                    }
+                    if prefix.len() > 8 {
+                        return Err(AppError::BadRequest(format!(
+                            "ncm_scope entry '{}' exceeds 8 digits", prefix
+                        )));
+                    }
+                    out.push(prefix.to_string());
+                }
+                out
+            }
+        };
+
+        let tags = body["tags"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+
+        Ok(Self { state, ncm_scope, tags })
+    }
+
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "tags": self.tags,
+            "state": self.state,
+            "ncm_scope": self.ncm_scope,
+        })
+    }
+}
+
+/// Signals that a job should be routed to DLQ immediately without retrying.
+#[derive(Debug)]
+pub struct NonRetryable(pub String);
+
+impl std::fmt::Display for NonRetryable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NonRetryable: {}", self.0)
+    }
+}
+impl std::error::Error for NonRetryable {}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IngestionJob {
     pub job_id: String,
@@ -19,6 +105,10 @@ pub struct IngestionJob {
     pub published_at: Option<NaiveDate>,
     pub effective_at: Option<NaiveDate>,
     pub tags: Vec<String>,
+    /// Validated Brazilian state (UF), if legislation is state-scoped.
+    pub state: Option<String>,
+    /// Validated NCM chapter/heading prefixes this legislation covers.
+    pub ncm_scope: Vec<String>,
     pub request_id: Option<String>,
     pub attempt: i32,
     pub created_at: DateTime<Utc>,
@@ -32,6 +122,103 @@ pub struct AuditJob {
     pub request_id: Option<String>,
     pub attempt: i32,
     pub created_at: DateTime<Utc>,
+}
+
+pub struct ReingestionService;
+
+impl ReingestionService {
+    /// Finds shared (`company_id IS NULL`) knowledge rows not updated within `staleness_ms`
+    /// and enqueues an `IngestionJob` for each. Uses an advisory lock so only one worker runs
+    /// the scan at a time. Returns the number of jobs enqueued, or `None` if lock was held.
+    pub async fn enqueue_stale(
+        pool: &PgPool,
+        queue: &mut crate::queue::RedisQueueClient,
+        staleness_ms: u64,
+        ingestion_stream: &str,
+    ) -> anyhow::Result<Option<usize>> {
+        const LOCK_KEY: i64 = 7766554433_i64;
+        let locked: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock($1)")
+            .bind(LOCK_KEY)
+            .fetch_one(pool)
+            .await?;
+        if !locked {
+            return Ok(None);
+        }
+
+        let result = Self::do_enqueue(pool, queue, staleness_ms, ingestion_stream).await;
+
+        let _: bool = sqlx::query_scalar("SELECT pg_advisory_unlock($1)")
+            .bind(LOCK_KEY)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(false);
+
+        result.map(Some)
+    }
+
+    async fn do_enqueue(
+        pool: &PgPool,
+        queue: &mut crate::queue::RedisQueueClient,
+        staleness_ms: u64,
+        ingestion_stream: &str,
+    ) -> anyhow::Result<usize> {
+        let staleness_interval = format!("{} milliseconds", staleness_ms);
+        let rows = sqlx::query(
+            r#"SELECT id, law_ref, law_type, content, source_url, published_at, effective_at, metadata
+               FROM fiscal_knowledge_base
+               WHERE company_id IS NULL
+                 AND is_superseded = FALSE
+                 AND updated_at < NOW() - $1::interval
+               ORDER BY updated_at ASC
+               LIMIT 100"#,
+        )
+        .bind(&staleness_interval)
+        .fetch_all(pool)
+        .await?;
+
+        let count = rows.len();
+        // Use a fixed sentinel UUID for shared (global) knowledge jobs
+        let global_company_id = Uuid::nil();
+
+        for row in rows {
+            use sqlx::Row;
+            let law_ref: String = row.get("law_ref");
+            let law_type: String = row.get("law_type");
+            let content: String = row.get("content");
+            let source_url: Option<String> = row.get("source_url");
+            let published_at: Option<chrono::NaiveDate> = row.get("published_at");
+            let effective_at: Option<chrono::NaiveDate> = row.get("effective_at");
+            let metadata: serde_json::Value = row.get("metadata");
+            let tags: Vec<String> = metadata["tags"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let state: Option<String> = metadata["state"].as_str().map(String::from);
+            let ncm_scope: Vec<String> = metadata["ncm_scope"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+
+            let job = IngestionJob {
+                job_id: Uuid::new_v4().to_string(),
+                company_id: global_company_id,
+                law_ref,
+                law_type,
+                source_url,
+                raw_content: Some(content),
+                published_at,
+                effective_at,
+                tags,
+                state,
+                ncm_scope,
+                request_id: Some("reingest-scheduler".into()),
+                attempt: 0,
+                created_at: Utc::now(),
+            };
+            queue.enqueue(ingestion_stream, &job).await?;
+        }
+        Ok(count)
+    }
 }
 
 pub struct IngestionService;
@@ -67,7 +254,11 @@ impl IngestionService {
         .bind(&job.source_url)
         .bind(job.published_at)
         .bind(job.effective_at)
-        .bind(serde_json::json!({ "tags": job.tags }))
+        .bind(serde_json::json!({
+            "tags": job.tags,
+            "state": job.state,
+            "ncm_scope": job.ncm_scope,
+        }))
         .bind(&content_hash)
         .fetch_one(&mut *tx)
         .await?;
@@ -132,8 +323,8 @@ impl IngestionService {
         let law_type = body["law_type"].as_str().ok_or_else(|| AppError::BadRequest("law_type required".into()))?.to_string();
         let source_url = body["source_url"].as_str().map(String::from);
         let raw_content = body["raw_content"].as_str().map(String::from);
+        let meta = IngestionMetadata::from_body(&body)?;
 
-        // Persist job record so workers can pick it up
         sqlx::query(
             r#"INSERT INTO fiscal_audit_log (company_id, sku_id, event_type, actor, request_id, event_payload)
                VALUES ($1, 'ingestion', 'INGESTION_QUEUED', 'api', $2, $3::jsonb)"#
@@ -145,6 +336,8 @@ impl IngestionService {
             "law_ref": law_ref,
             "law_type": law_type,
             "source_url": source_url,
+            "state": meta.state,
+            "ncm_scope": meta.ncm_scope,
         }))
         .execute(pool)
         .await?;
@@ -261,5 +454,66 @@ mod tests {
     #[test]
     fn hash_is_deterministic() {
         assert_eq!(hash_content("test"), hash_content("test"));
+    }
+
+    // ── IngestionMetadata validation ──────────────────────────────────────────
+
+    #[test]
+    fn metadata_valid_state_uppercased() {
+        let body = serde_json::json!({ "state": "sp" });
+        let m = IngestionMetadata::from_body(&body).unwrap();
+        assert_eq!(m.state.as_deref(), Some("SP"));
+    }
+
+    #[test]
+    fn metadata_invalid_state_rejected() {
+        let body = serde_json::json!({ "state": "XX" });
+        assert!(IngestionMetadata::from_body(&body).is_err());
+    }
+
+    #[test]
+    fn metadata_absent_state_is_none() {
+        let body = serde_json::json!({});
+        let m = IngestionMetadata::from_body(&body).unwrap();
+        assert!(m.state.is_none());
+    }
+
+    #[test]
+    fn metadata_valid_ncm_scope() {
+        let body = serde_json::json!({ "ncm_scope": ["22", "2203", "22030000"] });
+        let m = IngestionMetadata::from_body(&body).unwrap();
+        assert_eq!(m.ncm_scope, vec!["22", "2203", "22030000"]);
+    }
+
+    #[test]
+    fn metadata_ncm_scope_non_numeric_rejected() {
+        let body = serde_json::json!({ "ncm_scope": ["22AB"] });
+        assert!(IngestionMetadata::from_body(&body).is_err());
+    }
+
+    #[test]
+    fn metadata_ncm_scope_too_long_rejected() {
+        let body = serde_json::json!({ "ncm_scope": ["220300001"] });
+        assert!(IngestionMetadata::from_body(&body).is_err());
+    }
+
+    #[test]
+    fn metadata_ncm_scope_empty_string_rejected() {
+        let body = serde_json::json!({ "ncm_scope": [""] });
+        assert!(IngestionMetadata::from_body(&body).is_err());
+    }
+
+    #[test]
+    fn metadata_to_json_roundtrip() {
+        let body = serde_json::json!({
+            "state": "RJ",
+            "ncm_scope": ["22"],
+            "tags": ["beverages"]
+        });
+        let m = IngestionMetadata::from_body(&body).unwrap();
+        let j = m.to_json();
+        assert_eq!(j["state"], "RJ");
+        assert_eq!(j["ncm_scope"][0], "22");
+        assert_eq!(j["tags"][0], "beverages");
     }
 }
