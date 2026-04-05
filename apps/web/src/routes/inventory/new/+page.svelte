@@ -21,7 +21,7 @@
 	}
 </script>
 
-<form action="?/default" method="POST" novalidate use:handleEnhance>
+<form action="?/submit" method="POST" novalidate use:handleEnhance>
 	<InventoryEditor
 		cancelHref="/inventory"
 		description="Create a new SKU and add it to the fiscal catalog."

@@ -128,7 +128,7 @@
 }
 
 :global(.skip-link) {
-	position: absolute;
+	position: fixed;
 	top: var(--space-3);
 	left: var(--space-4);
 	padding: var(--space-2) var(--space-4);
@@ -136,13 +136,22 @@
 	background: var(--bg-2);
 	color: var(--text);
 	border: 1px solid var(--border-strong);
-	z-index: 999;
-	transform: translateY(-200%);
+	z-index: 9999;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	overflow: hidden;
+	width: 1px;
+	height: 1px;
 }
 
 :global(.skip-link:focus),
 :global(.skip-link:active) {
-	transform: translateY(0);
+	clip: auto;
+	clip-path: none;
+	white-space: normal;
+	overflow: visible;
+	width: auto;
+	height: auto;
 }
 
 :global(#rss-app) {

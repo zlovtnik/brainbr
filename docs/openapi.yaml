@@ -759,6 +759,16 @@ components:
         effective_at:
           type: string
           format: date
+        state:
+          type: string
+          description: Brazilian state (UF) this legislation applies to, e.g. "SP". Must be a valid 2-letter UF code.
+          example: SP
+        ncm_scope:
+          type: array
+          description: NCM chapter or heading prefixes this legislation covers (numeric strings, 1–8 digits).
+          items:
+            type: string
+          example: ["22", "2203"]
         tags:
           type: array
           items:
