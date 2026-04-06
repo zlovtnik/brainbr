@@ -87,7 +87,8 @@ sub _published_at {
   my ($self, $item, $raw_content) = @_;
 
   for my $key (qw(published_at publicationDate dataPublicacao pubDate date createdAt)) {
-    return $item->{$key} if defined $item->{$key} && length $item->{$key};
+    next unless defined $item->{$key} && length $item->{$key};
+    return extract_first_date($item->{$key}) // $item->{$key};
   }
 
   return extract_first_date($raw_content);

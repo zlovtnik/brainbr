@@ -288,7 +288,7 @@ impl IngestionService {
                        (company_id, law_ref, law_type, content, source_url, published_at, effective_at,
                         metadata, content_hash, content_version)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,1)
-                   ON CONFLICT (law_ref, company_id) WHERE company_id IS NOT NULL
+                   ON CONFLICT (law_ref, company_id) WHERE is_superseded = FALSE
                    DO UPDATE SET
                        content = EXCLUDED.content,
                        content_hash = EXCLUDED.content_hash,

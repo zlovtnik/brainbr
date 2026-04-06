@@ -6,9 +6,10 @@ use v5.30;
 
 use Carp qw(croak);
 use File::Temp ();
-use IPC::Run3 qw(run3);
+use IPC::Open3 qw(open3);
 use Mojo::JSON qw(decode_json);
 use Mojo::URL;
+use Symbol qw(gensym);
 use Time::HiRes qw(sleep);
 
 use Scraper::Normalise qw(clean_text extract_text_from_html);
@@ -57,7 +58,7 @@ sub fetch_response {
       my $message = $http_error->{message} // 'Unknown HTTP error';
       $error = "HTTP $code $message";
 
-      if ($code >= 400 && $code < 500) {
+      if ($code >= 400 && $code < 500 && $code != 429) {
         $self->_log(
           warn => 'Skipping source fetch after client error',
           {
@@ -170,14 +171,41 @@ sub _pdf_to_text {
   close $fh;
 
   my ($stdout, $stderr) = (q{}, q{});
-  run3(
-    [qw(pdftotext -layout -nopgbrk), $filename, '-'],
-    \undef,
-    \$stdout,
-    \$stderr,
-  );
+  my $timeout_s = int($self->config->{request_timeout_s} // 30);
+  my $stderr_fh = File::Temp->new(UNLINK => 1);
+  my $stdout_fh = gensym();
+  my $pid;
+  my $ok = eval {
+    $pid = open3(undef, $stdout_fh, $stderr_fh, qw(pdftotext -layout -nopgbrk), $filename, '-');
+    local $SIG{ALRM} = sub {
+      if (defined $pid) {
+        kill 'KILL', $pid;
+        waitpid($pid, 0);
+      }
+      die "pdftotext timed out after ${timeout_s}s\n";
+    };
+    alarm $timeout_s;
+    local $/;
+    $stdout = <$stdout_fh> // q{};
+    waitpid($pid, 0);
+    alarm 0;
+    1;
+  };
+  seek $stderr_fh, 0, 0;
+  {
+    local $/;
+    $stderr = <$stderr_fh> // q{};
+  }
 
-  if ($? != 0) {
+  if (!$ok) {
+    my $error = $@;
+    alarm 0;
+    chomp $error;
+    die $error;
+  }
+
+  my $exit_status = $? >> 8;
+  if ($exit_status != 0) {
     die "pdftotext failed: $stderr";
   }
 

@@ -13,7 +13,11 @@
 	let isLoading = $derived(Boolean(navigating.to));
 
 	// Local reactive state for the search bar
-	let query = $state(data.filters.query);
+	let query = $state('');
+
+	$effect(() => {
+		query = data.filters.query;
+	});
 
 	// Combobox open state
 	let filterOpen = $state(false);

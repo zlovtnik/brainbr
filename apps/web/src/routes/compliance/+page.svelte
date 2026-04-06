@@ -1,7 +1,8 @@
-<script lang="ts">
-	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
+	<script lang="ts">
+		import { enhance } from '$app/forms';
+		import { goto } from '$app/navigation';
+		import { page } from '$app/state';
+		import { onDestroy } from 'svelte';
 	import Button from '$lib/components/Button.svelte';
 	import InlineNotice from '$lib/components/InlineNotice.svelte';
 	import Input from '$lib/components/Input.svelte';
@@ -36,20 +37,42 @@
 	function pct(v: number) { return `${Math.round(v * 100)}%`; }
 
 	let copiedRunId = $state<string | null>(null);
+	let copyError = $state<string | null>(null);
+	let copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function resetCopyFeedback(delayMs = 1500) {
+		if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer);
+		copyFeedbackTimer = setTimeout(() => {
+			copiedRunId = null;
+			copyError = null;
+			copyFeedbackTimer = null;
+		}, delayMs);
+	}
 
 	async function handleCopyRunId(runId: string) {
 		try {
 			await navigator.clipboard.writeText(runId);
 			copiedRunId = runId;
-			setTimeout(() => { copiedRunId = null; }, 1500);
-		} catch {
+			copyError = null;
+			resetCopyFeedback();
+		} catch (err) {
+			console.error('Failed to copy run ID', err);
 			copiedRunId = null;
+			copyError = 'Copy failed. Check clipboard permissions and try again.';
+			resetCopyFeedback(2500);
 		}
 	}
 
 	function renderArtifact(artifact: ComplianceArtifactTransport) {
 		return artifact;
 	}
+
+	onDestroy(() => {
+		if (copyFeedbackTimer) {
+			clearTimeout(copyFeedbackTimer);
+			copyFeedbackTimer = null;
+		}
+	});
 </script>
 
 <svelte:head>
@@ -88,9 +111,13 @@
 				</Button>
 			</form>
 
-			{#if data.artifactError}
-				<InlineNotice variant="error" title="Fetch failed" message={data.artifactError} />
-			{/if}
+				{#if data.artifactError}
+					<InlineNotice variant="error" title="Fetch failed" message={data.artifactError} />
+				{/if}
+
+				{#if copyError}
+					<InlineNotice variant="error" title="Copy failed" message={copyError} />
+				{/if}
 
 			{#if data.artifact}
 				{@const a = renderArtifact(data.artifact)}

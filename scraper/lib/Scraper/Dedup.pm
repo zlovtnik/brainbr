@@ -11,10 +11,14 @@ sub new {
   my ($class, %args) = @_;
 
   croak 'redis_db is required' unless $args{redis_db};
+  my $default_ttl = 90 * 24 * 60 * 60;
+  my $ttl_seconds = $args{ttl_seconds};
+  $ttl_seconds = $default_ttl
+    unless defined $ttl_seconds && $ttl_seconds =~ /\A\d+\z/ && $ttl_seconds > 0;
 
   return bless {
     redis_db     => $args{redis_db},
-    ttl_seconds  => int($args{ttl_seconds} // (90 * 24 * 60 * 60)),
+    ttl_seconds  => int($ttl_seconds),
   }, $class;
 }
 
@@ -63,15 +67,34 @@ sub commit {
   my $set_key = "scraper:seen:$source_id";
   my $map_key = "scraper:seen:$source_id:law_ref";
 
-  if (defined $previous_digest && length $previous_digest && $previous_digest ne $digest) {
-    $self->{redis_db}->srem($set_key, $previous_digest);
-  }
+  if ($self->{redis_db}->can('multi') && $self->{redis_db}->can('exec')) {
+    my $ok = eval {
+      $self->{redis_db}->multi;
+      if (defined $previous_digest && length $previous_digest && $previous_digest ne $digest) {
+        $self->{redis_db}->srem($set_key, $previous_digest);
+      }
+      $self->{redis_db}->sadd($set_key, $digest);
+      $self->{redis_db}->hset($map_key, $law_ref, $digest);
+      $self->{redis_db}->exec;
+      1;
+    };
 
-  my $added = $self->{redis_db}->sadd($set_key, $digest);
-  $self->{redis_db}->hset($map_key, $law_ref, $digest);
+    if (!$ok) {
+      my $error = $@;
+      eval { $self->{redis_db}->discard if $self->{redis_db}->can('discard'); 1 };
+      die $error;
+    }
+  }
+  else {
+    if (defined $previous_digest && length $previous_digest && $previous_digest ne $digest) {
+      $self->{redis_db}->srem($set_key, $previous_digest);
+    }
+    $self->{redis_db}->sadd($set_key, $digest);
+    $self->{redis_db}->hset($map_key, $law_ref, $digest);
+  }
   $self->_refresh($set_key, $map_key);
 
-  return $added ? 1 : 0;
+  return 1;
 }
 
 sub _refresh {

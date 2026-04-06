@@ -4,9 +4,9 @@
 	import '$lib/styles/app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import {
+		buildNavTree,
 		getCapabilityByPath,
-		getCapabilitySummary,
-		navTree
+		getCapabilitySummary
 	} from '$lib/capabilities';
 	import NavGroup from '$lib/components/NavGroup.svelte';
 	import type { LayoutProps } from './$types';
@@ -16,6 +16,7 @@
 	let authenticated = $derived(Boolean(data.session?.authenticated));
 	let activeCapability = $derived(getCapabilityByPath(page.url.pathname));
 	let capabilitySummary = $derived(getCapabilitySummary(data.session));
+	let navigationTree = $derived(buildNavTree(data.session));
 
 	afterNavigate(({ from }) => {
 		if (!from) {
@@ -80,7 +81,7 @@
 			<div class="shell__sidebar-label">Operations</div>
 			<nav aria-label="Operations navigation">
 				<ul role="tree" class="cap-nav" aria-label="Operations navigation">
-					{#each navTree as item (item.id)}
+					{#each navigationTree as item (item.id)}
 						<NavGroup {item} />
 					{/each}
 				</ul>

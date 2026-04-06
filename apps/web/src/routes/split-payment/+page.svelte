@@ -1,8 +1,9 @@
-<script lang="ts">
-	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
-	import Button from '$lib/components/Button.svelte';
+	<script lang="ts">
+		import { enhance } from '$app/forms';
+		import { goto } from '$app/navigation';
+		import { page } from '$app/state';
+		import { onMount } from 'svelte';
+		import Button from '$lib/components/Button.svelte';
 	import InlineNotice from '$lib/components/InlineNotice.svelte';
 	import Input from '$lib/components/Input.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -10,15 +11,16 @@
 
 	let { data, form }: PageProps = $props();
 
-	let createLoading = $state(false);
-	let filterLoading = $state(false);
-	let filterSku = $state('');
-	let filterType = $state('');
+		let createLoading = $state(false);
+		let filterLoading = $state(false);
+		let filterSku = $state('');
+		let filterType = $state('');
+		let timestampValue = $state('');
 
-	$effect(() => {
-		if (data.skuId) filterSku = data.skuId;
-		if (data.eventType) filterType = data.eventType;
-	});
+		$effect(() => {
+			filterSku = data.skuId ?? '';
+			filterType = data.eventType ?? '';
+		});
 
 	function formatAmount(cents: number, currency: string) {
 		return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(cents / 100);
@@ -40,10 +42,16 @@
 		return `/split-payment?${p}`;
 	}
 
-	function defaultTimestamp() {
-		return new Date().toISOString().slice(0, 16);
-	}
-</script>
+		function defaultTimestamp() {
+			const now = new Date();
+			now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+			return now.toISOString().slice(0, 16);
+		}
+
+		onMount(() => {
+			timestampValue = defaultTimestamp();
+		});
+	</script>
 
 <svelte:head>
 	<title>Split Payment | BrainBR</title>
@@ -76,11 +84,11 @@
 				<Input id="sp-sku" name="sku_id" label="SKU ID" placeholder="SKU-123" required value={form?.createResult?.sku_id ?? ''} />
 				<Input id="sp-type" name="event_type" label="Event type" placeholder="split_payment_authorized" required value="" />
 				<div class="row-2">
-					<Input id="sp-amount" name="amount" label="Amount (BRL)" type="number" placeholder="154.90" required value="" />
+						<Input id="sp-amount" name="amount" label="Amount (BRL)" type="number" placeholder="154.90" required step="0.01" value="" />
 					<Input id="sp-currency" name="currency" label="Currency" value="BRL" />
 				</div>
 				<Input id="sp-idem" name="idempotency_key" label="Idempotency key" placeholder="split-SKU-123-…" required value="" />
-				<Input id="sp-ts" name="timestamp" label="Timestamp" type="datetime-local" required value={defaultTimestamp()} />
+					<Input id="sp-ts" name="timestamp" label="Timestamp" type="datetime-local" required value={timestampValue} />
 
 				<Button type="submit" disabled={createLoading}>
 					{#snippet children()}

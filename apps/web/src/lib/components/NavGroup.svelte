@@ -1,7 +1,8 @@
-<script lang="ts">
-	import { page } from '$app/state';
-	import type { NavItem } from '$lib/capabilities';
-	import { worstStatus } from '$lib/capabilities';
+	<script lang="ts">
+		import { page } from '$app/state';
+		import NavGroup from './NavGroup.svelte';
+		import type { NavItem } from '$lib/capabilities';
+		import { worstStatus } from '$lib/capabilities';
 
 	let { item }: { item: NavItem } = $props();
 
@@ -11,9 +12,14 @@
 	const hasActiveChild = (node: NavItem): boolean =>
 		node.children?.some((c) => (c.path ? isLeafActive(c.path) : hasActiveChild(c))) ?? false;
 
-	let open = $state(item.defaultOpen ?? false);
+	let open = $state(false);
+	let seededOpen = $state(false);
 
 	$effect(() => {
+		if (!seededOpen) {
+			open = item.defaultOpen ?? false;
+			seededOpen = true;
+		}
 		if (hasActiveChild(item)) open = true;
 	});
 
@@ -23,7 +29,7 @@
 	);
 
 	function onKeydown(e: KeyboardEvent) {
-		if (e.key === 'ArrowRight' || e.key === 'Enter') {
+		if (e.key === 'ArrowRight') {
 			open = true;
 		} else if (e.key === 'ArrowLeft') {
 			open = false;
@@ -31,7 +37,13 @@
 	}
 </script>
 
-<li role="treeitem" aria-expanded={open} class="nav-group" class:nav-group--collapsed={!open}>
+<li
+	role="treeitem"
+	aria-expanded={open}
+	aria-selected={hasActiveChild(item)}
+	class="nav-group"
+	class:nav-group--collapsed={!open}
+>
 	<button
 		class="nav-group__trigger"
 		class:nav-group__trigger--parent-active={hasActiveChild(item)}
@@ -61,7 +73,11 @@
 				{#if child.children}
 					<NavGroup item={child} />
 				{:else}
-					<li role="treeitem" aria-current={child.path && isLeafActive(child.path) ? 'page' : undefined}>
+					<li
+						role="treeitem"
+						aria-selected={child.path ? isLeafActive(child.path) : false}
+						aria-current={child.path && isLeafActive(child.path) ? 'page' : undefined}
+					>
 						<a
 							href={child.path}
 							class="nav-group__child-link"

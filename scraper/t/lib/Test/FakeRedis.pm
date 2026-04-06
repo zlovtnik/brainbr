@@ -12,6 +12,7 @@ sub new {
     strings => {},
     expiry  => {},
     streams => {},
+    txn     => undef,
   }, $class;
 }
 
@@ -102,6 +103,24 @@ sub xadd {
     fields => {%fields},
   };
   return $id;
+}
+
+sub multi {
+  my ($self) = @_;
+  $self->{txn} = 1;
+  return 'OK';
+}
+
+sub exec {
+  my ($self) = @_;
+  $self->{txn} = undef;
+  return [];
+}
+
+sub discard {
+  my ($self) = @_;
+  $self->{txn} = undef;
+  return 'OK';
 }
 
 1;

@@ -22,7 +22,18 @@ sub fetch_documents {
 
   my @documents;
   for my $entry (@links) {
-    my $document = $self->fetch_text_document($entry->{source_url}, $request_id);
+    my $document = eval { $self->fetch_text_document($entry->{source_url}, $request_id) };
+    if (!$document) {
+      $self->_log(
+        error => 'Failed to fetch CONFAZ document',
+        {
+          request_id => $request_id,
+          source_url => $entry->{source_url},
+          error      => "$@",
+        },
+      );
+      next;
+    }
     next if $document->{skip};
 
     my $title = $entry->{title};
@@ -57,13 +68,14 @@ sub extract_index_links {
   my $dom = Mojo::DOM->new($html);
   my %seen;
   my @links;
+  my $convenio_pattern = qr/conv(?:e|ê)ni(?:o|ô)s?/iu;
 
   for my $anchor ($dom->find('a')->each) {
     my $href = $anchor->attr('href') // next;
     next if $href =~ /\A(?:mailto|javascript):/i;
 
     my $text = clean_text($anchor->all_text);
-    next unless $href =~ /conven/i || $text =~ /\bconven/i;
+    next unless $href =~ $convenio_pattern || $text =~ $convenio_pattern;
 
     my $absolute = eval { $self->absolute_url($base_url, $href) };
     next unless $absolute;

@@ -47,7 +47,7 @@ changes required.
 
 ## 4. Runtime model
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │  scraper (Perl / Mojolicious::Lite + Minion)        │
 │                                                     │
@@ -111,7 +111,7 @@ Rules:
 
 Before enqueuing, the scraper checks a Redis SET key per source:
 
-```
+```text
 KEY   scraper:seen:<source_id>
 TYPE  Redis SET
 TTL   90 days (rolling — refreshed on each successful enqueue)
@@ -147,7 +147,8 @@ All values are read from environment — no hardcoded secrets.
 
 | Failure | Behaviour |
 |---|---|
-| HTTP 4xx on source fetch | Log warning, skip document, do not DLQ |
+| HTTP 4xx except 429 on source fetch | Log warning, skip document, do not DLQ |
+| HTTP 429 (rate limit) | Retry with exponential backoff, respect `Retry-After` header if present, max retries = `SCRAPER_MAX_RETRIES` (then skip/DLQ on final failure) |
 | HTTP 5xx / timeout | Retry up to `SCRAPER_MAX_RETRIES` with exponential backoff (base 5 s) |
 | PDF parse failure | Log error with `source_url`, write raw error payload to DLQ, continue |
 | Redis write failure | Log error, retry once; if still failing, log critical and exit job (Minion will reschedule) |
@@ -159,7 +160,7 @@ All errors include `source_id`, `source_url`, and a `request_id` in the log line
 
 ## 9. Project layout
 
-```
+```text
 scraper/
   bin/
     scraper.pl          # Mojolicious::Lite app + Minion worker entrypoint

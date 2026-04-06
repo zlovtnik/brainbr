@@ -24,14 +24,16 @@ export const load: PageServerLoad = async (event) => {
 export const actions: Actions = {
 	query: async (event) => {
 		// amazonq-ignore-next-line
-		requireSession(event);
-		const data = await event.request.formData();
-		const query = data.get('query')?.toString().trim() ?? '';
-		const k = Math.min(20, Math.max(1, parseInt(data.get('k')?.toString() ?? '5', 10)));
-		const law_type = data.get('law_type')?.toString().trim() || undefined;
-		const published_after = data.get('published_after')?.toString().trim() || undefined;
+			requireSession(event);
+			const data = await event.request.formData();
+			const query = data.get('query')?.toString().trim() ?? '';
+			const rawK = parseInt(data.get('k')?.toString() ?? '', 10);
+			const k = Number.isFinite(rawK) && !Number.isNaN(rawK) ? Math.min(20, Math.max(1, rawK)) : 5;
+			const law_type = data.get('law_type')?.toString().trim() || undefined;
+			const published_after = data.get('published_after')?.toString().trim() || undefined;
+			const queryInput = { query, k, law_type, published_after };
 
-		if (!query) return fail(422, { queryError: 'Query text is required.' });
+			if (!query) return fail(422, { queryError: 'Query text is required.', queryInput });
 
 		try {
 			const results = await createApiClientFromEvent(event).auditQuery({
@@ -39,13 +41,13 @@ export const actions: Actions = {
 				k,
 				filters: law_type || published_after ? { law_type, published_after } : undefined
 			});
-			return { queryResults: results, queryInput: { query, k, law_type, published_after } };
-		} catch (cause) {
-			if (cause instanceof ApiClientError) {
-				return fail(cause.status, { queryError: cause.message });
+				return { queryResults: results, queryInput };
+			} catch (cause) {
+				if (cause instanceof ApiClientError) {
+					return fail(cause.status, { queryError: cause.message, queryInput });
+				}
+				throw cause;
 			}
-			throw cause;
-		}
 	},
 
 	reaudit: async (event) => {

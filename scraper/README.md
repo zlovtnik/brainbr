@@ -5,6 +5,8 @@ payloads directly to the Redis ingestion stream consumed by the Rust worker.
 
 ## Run locally
 
+From the repository root:
+
 ```bash
 cp .env.example .env
 cp scraper/.env.example scraper/.env

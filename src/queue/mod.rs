@@ -123,6 +123,35 @@ impl RedisQueueClient {
         Ok(messages)
     }
 
+    pub async fn set_retry_delay(&mut self, stream: &str, id: &str, delay_ms: u64) -> anyhow::Result<()> {
+        let key = Self::retry_delay_key(stream, id);
+        redis::cmd("PSETEX")
+            .arg(&key)
+            .arg(delay_ms.max(1))
+            .arg("1")
+            .query_async::<()>(&mut self.conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn retry_delay_remaining_ms(&mut self, stream: &str, id: &str) -> anyhow::Result<Option<u64>> {
+        let key = Self::retry_delay_key(stream, id);
+        let ttl: i64 = redis::cmd("PTTL")
+            .arg(&key)
+            .query_async(&mut self.conn)
+            .await?;
+        Ok((ttl > 0).then_some(ttl as u64))
+    }
+
+    pub async fn clear_retry_delay(&mut self, stream: &str, id: &str) -> anyhow::Result<()> {
+        let key = Self::retry_delay_key(stream, id);
+        redis::cmd("DEL")
+            .arg(&key)
+            .query_async::<()>(&mut self.conn)
+            .await?;
+        Ok(())
+    }
+
     pub async fn read_batch(
         &mut self,
         stream: &str,
@@ -195,5 +224,9 @@ impl RedisQueueClient {
             .query_async::<()>(&mut self.conn)
             .await?;
         Ok(())
+    }
+
+    fn retry_delay_key(stream: &str, id: &str) -> String {
+        format!("queue:retry-delay:{stream}:{id}")
     }
 }

@@ -21,6 +21,18 @@ export function worstStatus(items: NavItem[]): NavStatus {
 	return worst;
 }
 
+function availabilityToNavStatus(availability: CapabilityAvailability): NavStatus {
+	return availability === 'partial' || availability === 'locked' ? availability : 'live';
+}
+
+function getNavItemCapability(node: NavItem): CapabilityDefinition | null {
+	if (node.path) {
+		return getCapabilityByPath(node.path);
+	}
+
+	return capabilityList.find((entry) => entry.id === node.id) ?? null;
+}
+
 export const navTree: NavItem[] = [
 	{
 		id: 'platform',
@@ -646,4 +658,27 @@ export function getCapabilitySummary(session: SessionShape | null | undefined) {
 		locked,
 		total: capabilityList.length
 	};
+}
+
+export function buildNavTree(session: SessionShape | null | undefined): NavItem[] {
+	const scopes = session?.scopes ?? [];
+
+	const mapNode = (node: NavItem): NavItem => {
+		const children = node.children?.map(mapNode);
+		if (children) {
+			return {
+				...node,
+				children,
+				status: worstStatus(children)
+			};
+		}
+
+		const capability = getNavItemCapability(node);
+		return {
+			...node,
+			status: capability ? availabilityToNavStatus(getCapabilityAvailability(capability, scopes)) : 'live'
+		};
+	};
+
+	return navTree.map(mapNode);
 }

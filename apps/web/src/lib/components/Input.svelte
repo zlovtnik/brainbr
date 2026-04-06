@@ -6,11 +6,12 @@
 		value?: string;
 		type?: string;
 		error?: string;
-		hint?: string;
-		required?: boolean;
-		placeholder?: string;
-		readonly?: boolean;
-	}
+			hint?: string;
+			required?: boolean;
+			placeholder?: string;
+			readonly?: boolean;
+			step?: string;
+		}
 
 	let {
 		id,
@@ -20,10 +21,11 @@
 		type = 'text',
 		error,
 		hint,
-		required = false,
-		placeholder,
-		readonly = false
-	}: Props = $props();
+			required = false,
+			placeholder,
+			readonly = false,
+			step
+		}: Props = $props();
 
 	let errorId = $derived(error ? `${id}-error` : undefined);
 	let describedBy = $derived(
@@ -43,10 +45,11 @@
 		{name}
 		{type}
 		bind:value
-		{placeholder}
-		{readonly}
-		{required}
-		aria-invalid={Boolean(error)}
+			{placeholder}
+			{readonly}
+			{required}
+			{step}
+			aria-invalid={Boolean(error)}
 		aria-describedby={describedBy}
 		aria-errormessage={errorId}
 	/>
