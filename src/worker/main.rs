@@ -225,7 +225,9 @@ async fn process_messages<J, F, Fut>(
         }
 
         match serde_json::from_str::<J>(&payload) {
-            Ok(job) => match process(job).await {
+            Ok(job) => {
+                    tracing::info!(stream, id, "Processing job");
+                    match process(job).await {
                 Ok(()) => {
                     if let Err(e) = queue.clear_retry_count(stream, &id).await {
                         tracing::warn!(stream, id, "Failed to clear retry count: {e}");
@@ -280,10 +282,11 @@ async fn process_messages<J, F, Fut>(
                         if let Err(delay_err) = queue.set_retry_delay(stream, &id, backoff).await {
                             tracing::warn!(stream, id, "Failed to persist retry delay: {delay_err}");
                         }
-                        tracing::warn!(stream, id, attempt, backoff_ms = backoff, "Job failed and will be reclaimed after retry delay: {e}");
+                        tracing::warn!(stream, id, attempt, backoff_ms = backoff, "Job failed, will retry after backoff: {e}");
                     }
-                }
-            },
+                } // end Err(e) arm of process
+            } // end match process(job)
+            } // end Ok(job)
             Err(e) => {
                 tracing::error!(stream, "Failed to deserialize job: {e}");
                 if let Err(delay_err) = queue.clear_retry_delay(stream, &id).await {

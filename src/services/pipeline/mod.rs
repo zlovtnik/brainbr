@@ -386,6 +386,7 @@ impl IngestionService {
         Ok(serde_json::json!({
             "job_id": job_id,
             "status": "queued",
+            "queued_at": Utc::now().to_rfc3339(),
             "law_ref": law_ref,
             "law_type": law_type,
             "company_id": company_id,
