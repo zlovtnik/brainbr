@@ -1,0 +1,35 @@
+sources:
+  - id: confaz
+    parser_class: Scraper::Source::Confaz
+    index_url: https://www.confaz.fazenda.gov.br/legislacao/convenios/
+    cadence_seconds: 21600
+    tags:
+      - icms
+      - confaz
+    law_type: convenio
+    request_limit: 12
+
+  - id: dou
+    parser_class: Scraper::Source::Dou
+    api_url: https://www.in.gov.br/servicos/busca-de-publicacoes
+    cadence_seconds: 43200
+    tags:
+      - dou
+      - receita-federal
+    law_type: diario_oficial
+    request_limit: 20
+    query:
+      q: receita federal
+      sortType: 0
+      delta: 20
+      start: 0
+
+  - id: rfb_instrucoes
+    parser_class: Scraper::Source::RfbInstrucoes
+    index_url: https://normas.receita.fazenda.gov.br/sijut2consulta/consulta.action
+    cadence_seconds: 86400
+    tags:
+      - receita-federal
+      - instrucao-normativa
+    law_type: instrucao_normativa
+    request_limit: 12

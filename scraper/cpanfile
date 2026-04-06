@@ -1,0 +1,15 @@
+requires 'Mojolicious',             '9.35';
+requires 'Mojo::Redis',             '3.29';
+requires 'Minion',                  '10.30';
+requires 'Minion::Backend::Redis',  '0.003';
+requires 'YAML::XS',                '0.89';
+requires 'Digest::SHA',             '6.04';
+requires 'UUID::Tiny',              '1.04';
+requires 'DateTime::Format::ISO8601','0.16';
+requires 'Text::Unidecode',         '1.30';
+requires 'IPC::Run3',               '0.049';
+
+on 'test' => sub {
+  requires 'Test::More',      '1.302190';
+  requires 'Test::Exception', '0.43';
+};

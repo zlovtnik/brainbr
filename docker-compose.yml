@@ -55,5 +55,20 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-fiscal_user}:${DB_PASSWORD}@db:5432/fiscalbrain
       REDIS_URL: redis://redis:6379/0
 
+  scraper:
+    build: ./scraper
+    container_name: fiscalbrain_scraper
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      INGESTION_STREAM: queue_ingestion
+      INGESTION_DLQ: queue_ingestion_dlq
+      SCRAPER_SOURCES_FILE: config/sources.yaml
+      LOG_LEVEL: info
+
 volumes:
   pgdata:

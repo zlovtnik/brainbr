@@ -3,6 +3,7 @@
 Open-source fiscal engine for the Brazilian tax reform transition (EC 132/2023).
 
 Built with Rust (Axum · Tokio · sqlx), PostgreSQL 16 + pgvector, Redis, and a SvelteKit web app.
+The repo also includes a standalone Perl scraper service for automated regulatory ingestion.
 
 ## Stack
 
@@ -13,6 +14,7 @@ Built with Rust (Axum · Tokio · sqlx), PostgreSQL 16 + pgvector, Redis, and a 
 | Queue / Cache | Redis 7 (streams) |
 | Embeddings / LLM | OpenAI (`text-embedding-3-small`, `gpt-4o`) |
 | Web | SvelteKit 5 (`apps/web`) |
+| Scraper | Perl 5.38+, Mojolicious, Minion, Redis |
 | Infrastructure | Docker Compose |
 
 ## Quick start
@@ -41,6 +43,7 @@ Health check: `GET http://localhost:8080/actuator/health`
 
 - `api` — REST API on `:8080`, runs migrations on startup
 - `worker` — background processor (ingestion, RAG audits, reporting)
+- `scraper` — scheduled regulatory source poller that writes shared `IngestionJob` payloads to `queue_ingestion`
 - `db` — PostgreSQL 16 with pgvector
 - `redis` — queue and cache
 
@@ -60,6 +63,7 @@ src/
   worker/       background job entrypoint
 migrations/     SQL migration files (applied by sqlx at startup)
 apps/web/       SvelteKit frontend
+scraper/        Perl regulatory scraper service (Minion + Redis)
 ```
 
 ## Running tests
@@ -68,6 +72,7 @@ apps/web/       SvelteKit frontend
 cargo test                  # unit + integration (requires running db/redis)
 cd apps/web && bun test     # frontend unit tests
 cd apps/web && bun e2e      # Playwright e2e
+cd scraper && prove -lr t/  # scraper unit/integration tests
 ```
 
 ## Documentation

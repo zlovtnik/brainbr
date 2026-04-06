@@ -193,7 +193,7 @@ scraper/
 requires 'Mojolicious',          '9.35';
 requires 'Mojo::Redis',          '3.29';   # Redis client (Mojo-native)
 requires 'Minion',               '10.30';  # Job queue / scheduler
-requires 'Minion::Backend::Redis','0.04';  # Minion backend on Redis
+requires 'Minion::Backend::Redis','0.003'; # Minion backend on Redis
 requires 'YAML::XS',             '0.89';   # sources.yaml parsing
 requires 'Digest::SHA',          '6.04';   # SHA-256 for dedup hashing
 requires 'UUID::Tiny',           '1.04';   # UUIDv4 generation
