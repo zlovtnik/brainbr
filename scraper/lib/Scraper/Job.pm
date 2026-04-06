@@ -31,10 +31,10 @@ sub build_job {
   croak 'raw_content is required to build an ingestion job' unless length $raw_content;
 
   my $job_id = create_uuid_as_string(UUID_V4);
-  my $tag_values = $args{tags} // [];
-  my @tags = _unique(grep { defined && length } @{$tag_values});
-  my $ncm_scope_values = $args{ncm_scope} // [];
-  my @ncm_scope = grep { defined && length } @{$ncm_scope_values};
+  my $tag_values   = ref($args{tags})      eq 'ARRAY' ? $args{tags}      : [];
+  my @tags          = _unique(grep { defined && length } @{$tag_values});
+  my $ncm_scope_values = ref($args{ncm_scope}) eq 'ARRAY' ? $args{ncm_scope} : [];
+  my @ncm_scope     = grep { defined && length } @{$ncm_scope_values};
 
   return {
     job_id       => $job_id,

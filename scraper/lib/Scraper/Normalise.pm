@@ -97,21 +97,35 @@ sub parse_flexible_date {
   $value = clean_text($value);
 
   if ($value =~ /\A(\d{4})[-\/](\d{2})[-\/](\d{2})\z/) {
-    return sprintf '%04d-%02d-%02d', $1, $2, $3;
+    my ($y, $m, $d) = (int $1, int $2, int $3);
+    return undef unless _valid_date($y, $m, $d);
+    return sprintf '%04d-%02d-%02d', $y, $m, $d;
   }
 
   if ($value =~ /\A(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\z/) {
-    return sprintf '%04d-%02d-%02d', $3, $2, $1;
+    my ($d, $m, $y) = (int $1, int $2, int $3);
+    return undef unless _valid_date($y, $m, $d);
+    return sprintf '%04d-%02d-%02d', $y, $m, $d;
   }
 
   my $ascii = lc unidecode($value);
   if ($ascii =~ /\A(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})\z/) {
-    my ($day, $month_name, $year) = ($1, $2, $3);
+    my ($day, $month_name, $year) = (int $1, $2, int $3);
     my $month = $MONTH_NUMBER{$month_name} or return undef;
+    return undef unless _valid_date($year, $month, $day);
     return sprintf '%04d-%02d-%02d', $year, $month, $day;
   }
 
   return undef;
+}
+
+sub _valid_date {
+  my ($y, $m, $d) = @_;
+  return 0 unless $m >= 1 && $m <= 12 && $d >= 1;
+  my @days_in_month = (0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31);
+  my $leap = ($y % 4 == 0 && ($y % 100 != 0 || $y % 400 == 0)) ? 1 : 0;
+  $days_in_month[2] = 29 if $leap;
+  return $d <= $days_in_month[$m];
 }
 
 sub _decode_text {

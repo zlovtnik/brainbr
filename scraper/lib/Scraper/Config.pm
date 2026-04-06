@@ -26,8 +26,10 @@ sub from_env {
 
   my @sources = map { _normalise_source($_) } @$sources;
 
-  my $timeout_s = int($ENV{SCRAPER_REQUEST_TIMEOUT_S} // 30);
-  my $max_retries = int($ENV{SCRAPER_MAX_RETRIES} // 3);
+  my $timeout_s   = $ENV{SCRAPER_REQUEST_TIMEOUT_S};
+  my $max_retries  = $ENV{SCRAPER_MAX_RETRIES};
+  $timeout_s  = (defined $timeout_s  && $timeout_s  =~ /\A\d+\z/ && $timeout_s  > 0) ? int($timeout_s)  : 30;
+  $max_retries = (defined $max_retries && $max_retries =~ /\A\d+\z/ && $max_retries > 0) ? int($max_retries) : 3;
 
   return bless {
     root_dir             => $root_dir->to_string,

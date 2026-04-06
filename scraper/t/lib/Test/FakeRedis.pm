@@ -79,6 +79,9 @@ sub set {
   elsif (exists $opts{EX}) {
     $self->{expiry}{$key} = $opts{EX};
   }
+  else {
+    delete $self->{expiry}{$key};
+  }
   return 'OK';
 }
 
@@ -88,6 +91,8 @@ sub del {
   delete $self->{sets}{$key};
   delete $self->{strings}{$key};
   delete $self->{expiry}{$key};
+  delete $self->{streams}{$key};
+  delete $self->{last_ids}{$key};
   return 1;
 }
 

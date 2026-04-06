@@ -4,6 +4,8 @@ use strict;
 use warnings;
 use autodie;
 use Test::More;
+use File::Basename qw(dirname);
+use File::Spec;
 
 use Mojo::UserAgent;
 
@@ -62,7 +64,8 @@ done_testing();
 
 sub _slurp {
   my ($relative) = @_;
-  my $path = "t/$relative";
+  my $base = dirname(__FILE__);
+  my $path = File::Spec->catfile($base, $relative);
   open my $fh, '<', $path;
   local $/;
   return <$fh>;
