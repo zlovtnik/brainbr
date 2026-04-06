@@ -1,20 +1,20 @@
 :root {
-	--bg: #0d0f12;
-	--bg-rgb: 13, 15, 18;
-	--bg-1: #12151a;
-	--bg-2: #181c23;
-	--bg-3: #1e222b;
+	--bg: #0B0F17;
+	--bg-rgb: 11, 15, 23;
+	--bg-1: #0F1420;
+	--bg-2: #121826;
+	--bg-3: #1A2233;
 	--bg-soft: rgba(255, 255, 255, 0.04);
-	--border: #272c37;
-	--border-strong: #323844;
+	--border: #1F2937;
+	--border-strong: #2A3446;
 	--line: rgba(255, 255, 255, 0.04);
-	--text: #e8eaf0;
-	--text-muted: #c4cad5;
-	--text-faint: #98a1b2;
-	--accent: #4f8ef7;
-	--accent-vivid: #7ab1ff;
-	--accent-soft: rgba(79, 142, 247, 0.12);
-	--accent-border: rgba(79, 142, 247, 0.3);
+	--text: #E6EAF2;
+	--text-muted: #9AA4B2;
+	--text-faint: #6B7280;
+	--accent: #5B8CFF;
+	--accent-vivid: #7AA2FF;
+	--accent-soft: rgba(91, 140, 255, 0.12);
+	--accent-border: rgba(91, 140, 255, 0.3);
 	--success: #3ecf8e;
 	--success-soft: rgba(62, 207, 142, 0.1);
 	--success-border: rgba(62, 207, 142, 0.25);
@@ -27,7 +27,7 @@
 	--neutral: var(--text-muted);
 	--neutral-soft: rgba(200, 210, 225, 0.08);
 	--neutral-border: var(--border-strong);
-	--focus-ring: rgba(79, 142, 247, 0.35);
+	--focus-ring: rgba(91, 140, 255, 0.35);
 	--shadow-card: none;
 	--shadow-soft: none;
 	--shadow-button: none;
@@ -72,7 +72,7 @@
 	--color-success-soft: var(--success-soft);
 	--color-success-border: var(--success-border);
 	--color-input-bg: var(--bg-2);
-	--color-input-border: var(--border);
-	--color-input-border-strong: var(--border-strong);
+	--color-input-border: #2A3446;
+	--color-input-border-strong: #3B4A63;
 	--color-focus-ring: var(--focus-ring);
 }

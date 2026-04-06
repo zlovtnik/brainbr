@@ -1,7 +1,7 @@
 use redis::{aio::ConnectionManager, RedisResult};
 use serde::Serialize;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RedisQueueClient {
     conn: ConnectionManager,
     pub ingestion_stream: String,
@@ -123,14 +123,14 @@ impl RedisQueueClient {
 
     pub async fn acknowledge(&mut self, stream: &str, group: &str, id: &str) -> anyhow::Result<()> {
         redis::cmd("XACK").arg(stream).arg(group).arg(id)
-            .query_async(&mut self.conn)
+            .query_async::<()>(&mut self.conn)
             .await?;
         Ok(())
     }
 
     pub async fn move_to_dlq(&mut self, dlq: &str, payload: &str) -> anyhow::Result<()> {
         redis::cmd("XADD").arg(dlq).arg("*").arg("payload").arg(payload)
-            .query_async(&mut self.conn)
+            .query_async::<()>(&mut self.conn)
             .await?;
         Ok(())
     }

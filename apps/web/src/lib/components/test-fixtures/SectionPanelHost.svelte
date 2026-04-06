@@ -4,18 +4,18 @@
 	interface Props {
 		collapsible?: boolean;
 		defaultOpen?: boolean;
+		subtitle?: string;
+		meta?: string;
 	}
 
-	let { collapsible = false, defaultOpen = true }: Props = $props();
+	let { collapsible = false, defaultOpen = true, subtitle, meta: metaText }: Props = $props();
 </script>
 
-<SectionPanel
-	title="Panel title"
-	subtitle="Panel subtitle"
-	{collapsible}
-	{defaultOpen}
->
+<SectionPanel title="Panel title" {subtitle} {collapsible} {defaultOpen}>
 	{#snippet children()}
 		<p>Panel body</p>
+	{/snippet}
+	{#snippet meta()}
+		{metaText}
 	{/snippet}
 </SectionPanel>

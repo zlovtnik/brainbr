@@ -7,9 +7,18 @@ interface PlatformInfoResponse {
 	llmModel: string;
 }
 
+const ALLOWED_API_PROTOCOLS = new Set(['http:', 'https:']);
+
 function getApiBaseUrl(): string | null {
 	const baseUrl = env.API_BASE_URL?.trim() || process.env.API_BASE_URL?.trim();
-	return baseUrl ? baseUrl.replace(/\/$/, '') : null;
+	if (!baseUrl) return null;
+	try {
+		const parsed = new URL(baseUrl);
+		if (!ALLOWED_API_PROTOCOLS.has(parsed.protocol)) return null;
+		return parsed.origin;
+	} catch {
+		return null;
+	}
 }
 
 export const load: PageServerLoad = async ({ fetch }) => {

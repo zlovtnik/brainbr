@@ -6,6 +6,7 @@ import { consumeFlash } from '$lib/server/session';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
+ // amazonq-ignore-next-line
 	requireSession(event);
 
 	const successMessage = consumeFlash(event.cookies)?.message ?? null;

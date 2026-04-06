@@ -34,12 +34,23 @@ export class ApiClientError extends Error {
 	}
 }
 
+const ALLOWED_API_PROTOCOLS = new Set(['http:', 'https:']);
+
 function getApiBaseUrl(): string {
 	const baseUrl = env.API_BASE_URL?.trim() || process.env.API_BASE_URL?.trim();
 	if (!baseUrl) {
 		throw new Error('Missing API_BASE_URL for the SvelteKit backend proxy');
 	}
-	return baseUrl.replace(/\/$/, '');
+	let parsed: URL;
+	try {
+		parsed = new URL(baseUrl);
+	} catch {
+		throw new Error(`API_BASE_URL is not a valid URL: ${baseUrl}`);
+	}
+	if (!ALLOWED_API_PROTOCOLS.has(parsed.protocol)) {
+		throw new Error(`API_BASE_URL protocol not allowed: ${parsed.protocol}`);
+	}
+	return parsed.origin;
 }
 
 function createHeaders(token: string, requestId: string, hasBody: boolean): Headers {

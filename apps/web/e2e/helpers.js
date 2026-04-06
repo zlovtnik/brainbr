@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect } from '@playwright/test';
 
-export const mockApiPort = Number(process.env.MOCK_API_PORT || 5050);
+const _rawPort = Number(process.env.MOCK_API_PORT || 5050);
+export const mockApiPort = Number.isInteger(_rawPort) && _rawPort > 0 && _rawPort < 65536 ? _rawPort : 5050;
 
 export function createToken(payload) {
 	const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');

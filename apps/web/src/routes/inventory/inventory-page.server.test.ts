@@ -59,8 +59,9 @@ describe('inventory page server load', () => {
 			expect.objectContaining({ locals: expect.any(Object) })
 		);
 		expect(describeProtectedApiError).toHaveBeenCalledWith(
+			expect.objectContaining({ scopes: expect.any(Array) }),
 			expect.any(ApiClientError),
-			expect.any(Object)
+			expect.any(Array)
 		);
 	});
 });

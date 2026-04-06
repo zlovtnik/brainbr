@@ -53,11 +53,12 @@
 			<input name="redirectTo" type="hidden" value={form?.redirectTo ?? data.redirectTo} />
 
 			<label class="auth-field" for="token">
-				<span class="auth-field__label">Bearer JWT</span>
+				<span class="auth-field__label" id="token-label">Bearer JWT</span>
 				<textarea
 					bind:this={tokenField}
 					aria-describedby={form?.error ? 'auth-error token-hint' : 'token-hint'}
 					aria-invalid={Boolean(form?.error)}
+					aria-labelledby="token-label"
 					autocomplete="off"
 					id="token"
 					name="token"

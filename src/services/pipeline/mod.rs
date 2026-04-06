@@ -322,7 +322,7 @@ impl IngestionService {
         let law_ref = body["law_ref"].as_str().ok_or_else(|| AppError::BadRequest("law_ref required".into()))?.to_string();
         let law_type = body["law_type"].as_str().ok_or_else(|| AppError::BadRequest("law_type required".into()))?.to_string();
         let source_url = body["source_url"].as_str().map(String::from);
-        let raw_content = body["raw_content"].as_str().map(String::from);
+        let _raw_content = body["raw_content"].as_str().map(String::from);
         let meta = IngestionMetadata::from_body(&body)?;
 
         sqlx::query(

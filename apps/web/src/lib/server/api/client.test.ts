@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError, createApiClient } from '$lib/server/api/client';
 
+vi.mock('$env/dynamic/private', () => ({ env: { API_BASE_URL: 'http://example.test' } }));
+
 describe('api client', () => {
 	beforeEach(() => {
 		process.env.API_BASE_URL = 'http://example.test';

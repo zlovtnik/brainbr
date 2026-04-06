@@ -1,6 +1,6 @@
-const { defineConfig } = require('@playwright/test');
+import { defineConfig } from '@playwright/test';
 
-module.exports = defineConfig({
+export default defineConfig({
 	testDir: './e2e',
 	testMatch: /.*\.e2e\.(js|ts)$/,
 	fullyParallel: true,
@@ -21,7 +21,7 @@ module.exports = defineConfig({
 			command: 'bun run build && bun run preview',
 			env: {
 				API_BASE_URL: 'http://127.0.0.1:5050',
-				APP_SESSION_SECRET: 'test-session-secret-with-extra-entropy-1234567890'
+				APP_SESSION_SECRET: process.env.APP_SESSION_SECRET ?? 'test-session-secret-with-extra-entropy-1234567890'
 			},
 			port: 4173,
 			timeout: 120000,

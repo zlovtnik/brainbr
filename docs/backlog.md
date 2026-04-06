@@ -2,7 +2,7 @@
 
 ## Epic 1: Platform Bootstrap
 
-1. Initialize repository skeleton and Kotlin project metadata.
+1. Initialize repository skeleton and Rust project metadata.
 2. Add Docker Compose with `db`, `redis`, `api`, `worker`.
 3. Add configuration layer (`.env.example`, settings model).
 4. Create Flyway baseline and first migration chain.
@@ -27,7 +27,7 @@ Acceptance:
 - Composite-key CRUD paths pass.
 - Auth/persistence tests cover happy-path and failure-path behavior.
 - All DB/schema changes are delivered as Flyway migrations.
-- Documentation updates are included in `README.md`, `HELP.md`, and `sql/README.md` for tenancy model and RLS policy behavior.
+- Documentation updates are included in `README.md` and `sql/README.md` for tenancy model and RLS policy behavior.
 
 ## Epic 3: Ingestion and Embeddings
 
@@ -41,7 +41,7 @@ Acceptance:
 - Re-ingestion updates existing law rows idempotently.
 - Retrieval corpus populated and queryable.
 - Test coverage includes retry failures, deduplication edge cases, chunking boundary conditions, and idempotent re-ingestion failure paths.
-- Documentation is updated for ingestion architecture and embedding configuration in `README.md`, `HELP.md`, and `sql/README.md`.
+- Documentation is updated for ingestion architecture and embedding configuration in `README.md` and `sql/README.md`.
 
 ## Epic 4: RAG Tax Audit Engine
 
@@ -57,7 +57,7 @@ Acceptance:
 - Invalid LLM payload is rejected with traceable error.
 - Persisted fields (`reform_taxes`, `vector_id`, `audit_confidence`, `llm_model_used`) and `RATE_GENERATED` records are protected with encryption-at-rest, RBAC access control, and audit logging.
 - Data retention and deletion policies (GDPR/CCPA aligned) are defined and applied.
-- PII definition for the tax audit domain is documented in `README.md`, `HELP.md`, and `sql/README.md`.
+- PII definition for the tax audit domain is documented in `README.md` and `sql/README.md`.
 - Automated tests cover happy-path persistence plus failure-path rejection and traceability for invalid LLM payloads.
 
 ## Epic 5: API Surface

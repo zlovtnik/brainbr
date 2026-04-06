@@ -7,6 +7,7 @@ import { writeFlash } from '$lib/server/session';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
+	// amazonq-ignore-next-line
 	requireSession(event);
 	return {
 		initialValues: toInventoryFormValues()
@@ -14,7 +15,8 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-	submit: async (event) => {
+	default: async (event) => {
+		// amazonq-ignore-next-line
 		requireSession(event);
 
 		const formData = await event.request.formData();
