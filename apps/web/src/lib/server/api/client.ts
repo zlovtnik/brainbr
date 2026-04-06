@@ -8,6 +8,19 @@ import type {
 	InventoryWriteTransport,
 	InventoryWriteResultTransport
 } from '$lib/features/inventory/types';
+import type {
+	AuditExplainTransport,
+	AuditQueryTransport,
+	AuditQueryPayload,
+	ReAuditTransport
+} from '$lib/features/audit/types';
+import type { ComplianceArtifactTransport } from '$lib/features/compliance/types';
+import type {
+	SplitPaymentCreateTransport,
+	SplitPaymentCreateResultTransport,
+	SplitPaymentListTransport
+} from '$lib/features/split-payment/types';
+import type { IngestionCreateTransport, IngestionJobTransport } from '$lib/features/ingestion/types';
 
 interface ErrorPayload {
 	error_code?: string;
@@ -49,6 +62,11 @@ function getApiBaseUrl(): string {
 	}
 	if (!ALLOWED_API_PROTOCOLS.has(parsed.protocol)) {
 		throw new Error(`API_BASE_URL protocol not allowed: ${parsed.protocol}`);
+	}
+	if ((parsed.pathname !== '' && parsed.pathname !== '/') || parsed.search || parsed.hash) {
+		throw new Error(
+			`API_BASE_URL must be an origin-only URL (no path, query, or hash): ${baseUrl}`
+		);
 	}
 	return parsed.origin;
 }
@@ -196,6 +214,51 @@ export function createApiClient(options: ApiClientOptions) {
 					body: JSON.stringify(payload)
 				}
 			);
+		},
+		auditExplain(skuId: string): Promise<AuditExplainTransport> {
+			return request<AuditExplainTransport>(
+				`/api/v1/audit/explain/${encodeURIComponent(skuId)}`
+			);
+		},
+		auditQuery(payload: AuditQueryPayload): Promise<AuditQueryTransport> {
+			return request<AuditQueryTransport>('/api/v1/audit/query', {
+				method: 'POST',
+				body: JSON.stringify(payload)
+			});
+		},
+		reAudit(skuId: string): Promise<ReAuditTransport> {
+			return request<ReAuditTransport>(
+				`/api/v1/inventory/sku/${encodeURIComponent(skuId)}/re-audit`,
+				{ method: 'POST', body: '{}' }
+			);
+		},
+		complianceLatest(skuId: string): Promise<ComplianceArtifactTransport> {
+			return request<ComplianceArtifactTransport>(
+				`/api/v1/audit/explain/${encodeURIComponent(skuId)}/artifact/latest`
+			);
+		},
+		complianceByRunId(runId: string): Promise<ComplianceArtifactTransport> {
+			return request<ComplianceArtifactTransport>(
+				`/api/v1/audit/explain/artifact/runs/${encodeURIComponent(runId)}`
+			);
+		},
+		listSplitPayments(page = 1, limit = 50, skuId?: string, eventType?: string): Promise<SplitPaymentListTransport> {
+			const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+			if (skuId) params.set('sku_id', skuId);
+			if (eventType) params.set('event_type', eventType);
+			return request<SplitPaymentListTransport>(`/api/v1/split-payment/events?${params}`);
+		},
+		createSplitPayment(payload: SplitPaymentCreateTransport): Promise<SplitPaymentCreateResultTransport> {
+			return request<SplitPaymentCreateResultTransport>('/api/v1/split-payment/events', {
+				method: 'POST',
+				body: JSON.stringify(payload)
+			});
+		},
+		createIngestionJob(payload: IngestionCreateTransport): Promise<IngestionJobTransport> {
+			return request<IngestionJobTransport>('/api/v1/ingestion/jobs', {
+				method: 'POST',
+				body: JSON.stringify(payload)
+			});
 		}
 	};
 }

@@ -47,27 +47,31 @@
 	}
 
 	.field__label {
-		font-weight: 500;
-		color: var(--text);
+		font-size: 0.8rem;
+		font-weight: 400;
+		font-family: var(--font-mono);
+		letter-spacing: 0.04em;
+		color: var(--text-muted);
 	}
 
 	.field__select {
 		appearance: none;
 		width: 100%;
-		min-height: 3.2rem;
-		padding: 0.95rem 2.75rem 0.95rem 1rem;
+		min-height: 2rem;
+		padding: 0.35rem 2.2rem 0.35rem 0.65rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		background-color: var(--bg-2) !important;
+		font-size: 0.86rem;
 		color: var(--text);
 		background-image:
 			linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
 			linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
 		background-position:
-			calc(100% - 1.15rem) calc(50% - 0.12rem),
-			calc(100% - 0.8rem) calc(50% - 0.12rem);
+			calc(100% - 1rem) calc(50% - 0.1rem),
+			calc(100% - 0.68rem) calc(50% - 0.1rem);
 		background-repeat: no-repeat;
-		background-size: 0.42rem 0.42rem;
+		background-size: 0.38rem 0.38rem;
 		box-shadow: none;
 	}
 

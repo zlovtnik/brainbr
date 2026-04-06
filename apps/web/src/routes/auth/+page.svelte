@@ -77,8 +77,8 @@
 				<Button disabled={submitting} type="submit">
 					{#snippet children()}
 						{#if submitting}
-							<Spinner label="Signing in" />
-							Signing in…
+							<Spinner aria-hidden="true" />
+							<span aria-live="polite">Signing in…</span>
 						{:else}
 							Sign in
 						{/if}

@@ -1,3 +1,101 @@
+export type NavStatus = 'live' | 'available' | 'partial' | 'locked';
+
+export interface NavItem {
+	id: string;
+	label: string;
+	icon?: string;
+	path?: string;
+	status?: NavStatus;
+	children?: NavItem[];
+	defaultOpen?: boolean;
+}
+
+const statusRank: Record<NavStatus, number> = { live: 0, available: 1, partial: 2, locked: 3 };
+
+export function worstStatus(items: NavItem[]): NavStatus {
+	let worst: NavStatus = 'live';
+	for (const item of items) {
+		const s = item.children ? worstStatus(item.children) : (item.status ?? 'live');
+		if (statusRank[s] > statusRank[worst]) worst = s;
+	}
+	return worst;
+}
+
+function availabilityToNavStatus(availability: CapabilityAvailability): NavStatus {
+	return availability === 'partial' || availability === 'locked' ? availability : 'live';
+}
+
+function getNavItemCapability(node: NavItem): CapabilityDefinition | null {
+	if (node.path) {
+		return getCapabilityByPath(node.path);
+	}
+
+	return capabilityList.find((entry) => entry.id === node.id) ?? null;
+}
+
+export const navTree: NavItem[] = [
+	{
+		id: 'platform',
+		label: 'Platform',
+		icon: '◈',
+		status: 'live',
+		defaultOpen: false,
+		children: [
+			{ id: 'platform-overview', label: 'Overview', path: '/platform', status: 'live' }
+		]
+	},
+	{
+		id: 'inventory',
+		label: 'Inventory',
+		icon: '◫',
+		status: 'live',
+		defaultOpen: false,
+		children: [
+			{ id: 'inventory-items', label: 'Items', path: '/inventory', status: 'live' }
+		]
+	},
+	{
+		id: 'audit',
+		label: 'Audit',
+		icon: '◪',
+		status: 'live',
+		defaultOpen: false,
+		children: [
+			{ id: 'audit-queries', label: 'Queries', path: '/audit', status: 'live' }
+		]
+	},
+	{
+		id: 'compliance',
+		label: 'Compliance',
+		icon: '◧',
+		status: 'live',
+		defaultOpen: false,
+		children: [
+			{ id: 'compliance-artifacts', label: 'Artifacts', path: '/compliance', status: 'live' }
+		]
+	},
+	{
+		id: 'split-payment',
+		label: 'Split Payment',
+		icon: '◰',
+		status: 'live',
+		defaultOpen: false,
+		children: [
+			{ id: 'split-payment-events', label: 'Events', path: '/split-payment', status: 'live' }
+		]
+	},
+	{
+		id: 'ingestion',
+		label: 'Ingestion',
+		icon: '◱',
+		status: 'live',
+		defaultOpen: false,
+		children: [
+			{ id: 'ingestion-pipelines', label: 'Pipelines', path: '/ingestion', status: 'live' }
+		]
+	}
+];
+
 export type CapabilityId =
 	| 'platform'
 	| 'inventory'
@@ -560,4 +658,27 @@ export function getCapabilitySummary(session: SessionShape | null | undefined) {
 		locked,
 		total: capabilityList.length
 	};
+}
+
+export function buildNavTree(session: SessionShape | null | undefined): NavItem[] {
+	const scopes = session?.scopes ?? [];
+
+	const mapNode = (node: NavItem): NavItem => {
+		const children = node.children?.map(mapNode);
+		if (children) {
+			return {
+				...node,
+				children,
+				status: worstStatus(children)
+			};
+		}
+
+		const capability = getNavItemCapability(node);
+		return {
+			...node,
+			status: capability ? availabilityToNavStatus(getCapabilityAvailability(capability, scopes)) : 'live'
+		};
+	};
+
+	return navTree.map(mapNode);
 }

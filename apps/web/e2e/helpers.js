@@ -30,6 +30,31 @@ export async function resetMockApi(request) {
 	}
 }
 
+const ALLOWED_SCOPES = new Set([
+	'inventory:read', 'inventory:write',
+	'audit:read', 'audit:write', 'audit:trigger', 'audit:query',
+	'report:read', 'report:write',
+	'compliance:read',
+	'split_payment:read', 'split_payment:write',
+	'ingestion:write'
+]);
+
+const SUB_RE = /^[\w-]{1,64}$/;
+const TENANT_RE = /^[\w-]{1,64}$/;
+
+function validateSessionPayload(payload) {
+	if (typeof payload.sub !== 'string' || !payload.sub) throw new Error(`bootstrapSession: invalid sub "${payload.sub}"`);
+	if (!SUB_RE.test(payload.sub)) throw new Error(`bootstrapSession: invalid sub "${payload.sub}"`);
+	if (typeof payload.tenant_id !== 'string' || !payload.tenant_id) throw new Error(`bootstrapSession: invalid tenant_id "${payload.tenant_id}"`);
+	if (!TENANT_RE.test(payload.tenant_id)) throw new Error(`bootstrapSession: invalid tenant_id "${payload.tenant_id}"`);
+	if (typeof payload.scope !== 'string') throw new Error('bootstrapSession: scope must be a string');
+	const scopes = payload.scope.trim().split(/\s+/).filter(Boolean);
+	for (const s of scopes) {
+		if (!ALLOWED_SCOPES.has(s)) throw new Error(`bootstrapSession: disallowed scope "${s}"`);
+	}
+	return { sub: payload.sub, tenant_id: payload.tenant_id, scope: scopes.join(' ') };
+}
+
 export async function bootstrapSession(
 	page,
 	payload = {
@@ -38,9 +63,10 @@ export async function bootstrapSession(
 		scope: 'inventory:read inventory:write'
 	}
 ) {
+	const safePayload = validateSessionPayload(payload);
 	await page.goto('/auth');
 	await page.getByRole('button', { name: 'Advanced: use token' }).click();
-	await page.getByLabel('Bearer JWT').fill(createToken(payload));
+	await page.getByLabel('Bearer JWT').fill(createToken(safePayload));
 	await page.getByRole('button', { name: 'Start authenticated session' }).click();
 	await expect(page).toHaveURL(/\/platform$/);
 }

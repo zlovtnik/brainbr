@@ -1,0 +1,107 @@
+package Scraper::Source::Confaz;
+
+use strict;
+use warnings;
+use v5.30;
+
+use Mojo::DOM;
+use parent 'Scraper::Source::Base';
+
+use Scraper::Normalise qw(clean_text extract_first_date normalise_law_ref);
+
+sub fetch_documents {
+  my ($self, $request_id) = @_;
+
+  my $index_url = $self->config->{index_url};
+  my $index = $self->fetch_html($index_url, $request_id);
+  return () if $index->{skip};
+
+  my @links = $self->extract_index_links($index->{html}, $index_url);
+  my $limit = $self->config->{request_limit};
+  splice @links, $limit if defined $limit && $limit > 0 && @links > $limit;
+
+  my @documents;
+  for my $entry (@links) {
+    my $document = eval { $self->fetch_text_document($entry->{source_url}, $request_id) };
+    if (!$document) {
+      my $err = $@ || 'fetch_text_document returned falsy without exception';
+      $self->_log(
+        error => 'Failed to fetch CONFAZ document',
+        {
+          request_id => $request_id,
+          source_url => $entry->{source_url},
+          error      => $err,
+        },
+      );
+      next;
+    }
+    next if $document->{skip};
+
+    my $title = $entry->{title};
+    if (!$document->{is_pdf}) {
+      my $html_title = $self->_title_from_html($document->{body});
+      $title = $html_title if length $html_title;
+    }
+
+    my $raw_text = clean_text($document->{text});
+    next unless length $raw_text;
+
+    push @documents, {
+      title        => $title,
+      law_ref      => normalise_law_ref($title),
+      law_type     => $self->config->{law_type},
+      source_url   => $entry->{source_url},
+      raw_content  => $raw_text,
+      published_at => extract_first_date($raw_text),
+      effective_at => undef,
+      tags         => [ @{$self->config->{tags} // []} ],
+      state        => undef,
+      ncm_scope    => [],
+    };
+  }
+
+  return @documents;
+}
+
+sub extract_index_links {
+  my ($self, $html, $base_url) = @_;
+
+  my $dom = Mojo::DOM->new($html);
+  my %seen;
+  my @links;
+  my $convenio_pattern = qr/conv(?:e|ê)ni(?:o|ô)s?/iu;
+
+  for my $anchor ($dom->find('a')->each) {
+    my $href = $anchor->attr('href') // next;
+    next if $href =~ /\A(?:mailto|javascript):/i;
+
+    my $text = clean_text($anchor->all_text);
+    next unless $href =~ $convenio_pattern || $text =~ $convenio_pattern;
+
+    my $absolute = eval { $self->absolute_url($base_url, $href) };
+    next unless $absolute;
+    next if $seen{$absolute}++;
+
+    push @links, {
+      source_url => $absolute,
+      title      => length $text ? $text : $self->derive_title_from_url($absolute),
+    };
+  }
+
+  return @links;
+}
+
+sub _title_from_html {
+  my ($self, $html) = @_;
+  my $dom = Mojo::DOM->new($html);
+
+  for my $selector (qw(h1 h2 title)) {
+    my $node = $dom->at($selector) or next;
+    my $text = clean_text($node->all_text);
+    return $text if length $text;
+  }
+
+  return q{};
+}
+
+1;

@@ -8,8 +8,8 @@ use fiscalbrain_br::{
     },
 };
 use serde::de::DeserializeOwned;
-use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
-use tokio::sync::{broadcast, Mutex};
+use std::{future::Future, sync::Arc, time::Duration};
+use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
@@ -45,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
         queue.audit_dlq.clone(),
         consumer.clone(),
         cfg.worker.audit_poll_interval_ms,
+        cfg.worker.reclaim_idle_threshold_ms,
         shutdown_tx.subscribe(),
         cfg.queue.retry_max_attempts,
         cfg.queue.retry_base_backoff_ms,
@@ -64,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
         queue.ingestion_dlq.clone(),
         consumer.clone(),
         cfg.worker.ingestion_poll_interval_ms,
+        cfg.worker.reclaim_idle_threshold_ms,
         shutdown_tx.subscribe(),
         cfg.queue.retry_max_attempts,
         cfg.queue.retry_base_backoff_ms,
@@ -139,6 +141,7 @@ async fn run_worker<J, F, Fut>(
     dlq: String,
     consumer: String,
     poll_ms: u64,
+    reclaim_idle_threshold_ms: u64,
     mut shutdown: broadcast::Receiver<()>,
     max_retries: u32,
     base_backoff_ms: u64,
@@ -148,10 +151,30 @@ async fn run_worker<J, F, Fut>(
     F: Fn(J) -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
-    // Per-message retry counters: message_id -> attempt count
-    let retry_counts: Arc<Mutex<HashMap<String, u32>>> = Arc::new(Mutex::new(HashMap::new()));
+    const CLAIM_BATCH_SIZE: usize = 10;
 
     loop {
+        match queue.reclaim_pending(&stream, &group, &consumer, reclaim_idle_threshold_ms.max(1), CLAIM_BATCH_SIZE).await {
+            Ok(reclaimed) if !reclaimed.is_empty() => {
+                if shutdown.try_recv().is_ok() {
+                    tracing::info!(stream, "Worker shutting down");
+                    break;
+                }
+                process_messages(
+                    &mut queue,
+                    reclaimed,
+                    &stream,
+                    &group,
+                    &dlq,
+                    max_retries,
+                    base_backoff_ms,
+                    &process,
+                ).await;
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(stream, "Queue reclaim error: {e}"),
+        }
+
         tokio::select! {
             _ = shutdown.recv() => {
                 tracing::info!(stream, "Worker shutting down");
@@ -162,60 +185,113 @@ async fn run_worker<J, F, Fut>(
                     Ok(m) => m,
                     Err(e) => { tracing::warn!(stream, "Queue read error: {e}"); continue; }
                 };
-                for (id, payload) in messages {
-                    match serde_json::from_str::<J>(&payload) {
-                        Ok(job) => {
-                            match process(job).await {
-                                Ok(()) => {
-                                    retry_counts.lock().await.remove(&id);
-                                    if let Err(e) = queue.acknowledge(&stream, &group, &id).await {
-                                        tracing::error!(stream, "Failed to ack {id}: {e}");
-                                    }
-                                }
-                                Err(e) => {
-                                    // Non-retryable errors (e.g. confidence gate) go straight to DLQ
-                                    if e.downcast_ref::<NonRetryable>().is_some() {
-                                        tracing::error!(stream, id, "Non-retryable error, routing to DLQ immediately: {e}");
-                                        retry_counts.lock().await.remove(&id);
-                                        match queue.move_to_dlq(&dlq, &payload).await {
-                                            Ok(_) => { let _ = queue.acknowledge(&stream, &group, &id).await; }
-                                            Err(dlq_err) => tracing::error!(stream, "DLQ write failed: {dlq_err}"),
-                                        }
-                                        continue;
-                                    }
-                                    let attempt = {
-                                        let mut counts = retry_counts.lock().await;
-                                        let n = counts.entry(id.clone()).or_insert(0);
-                                        *n += 1;
-                                        *n
-                                    };
-                                    if attempt >= max_retries {
-                                        tracing::error!(stream, id, attempt, "Max retries reached, routing to DLQ: {e}");
-                                        retry_counts.lock().await.remove(&id);
-                                        match queue.move_to_dlq(&dlq, &payload).await {
-                                            Ok(_) => { let _ = queue.acknowledge(&stream, &group, &id).await; }
-                                            Err(dlq_err) => tracing::error!(stream, "DLQ write failed: {dlq_err}"),
-                                        }
-                                    } else {
-                                        let jitter = std::time::SystemTime::now()
-                                            .duration_since(std::time::UNIX_EPOCH)
-                                            .map(|d| d.subsec_nanos() as u64 % base_backoff_ms)
-                                            .unwrap_or(0);
-                                        let backoff = base_backoff_ms * (1u64 << (attempt - 1).min(6)) + jitter;
-                                        tracing::warn!(stream, id, attempt, backoff_ms = backoff, "Job failed, will redeliver: {e}");
-                                        tokio::time::sleep(Duration::from_millis(backoff)).await;
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(stream, "Failed to deserialize job: {e}");
-                            match queue.move_to_dlq(&dlq, &payload).await {
-                                Ok(_) => { let _ = queue.acknowledge(&stream, &group, &id).await; }
-                                Err(dlq_err) => tracing::error!(stream, "DLQ write failed, message will redeliver: {dlq_err}"),
-                            }
-                        }
+                process_messages(
+                    &mut queue,
+                    messages,
+                    &stream,
+                    &group,
+                    &dlq,
+                    max_retries,
+                    base_backoff_ms,
+                    &process,
+                ).await;
+            }
+        }
+    }
+}
+
+async fn process_messages<J, F, Fut>(
+    queue: &mut RedisQueueClient,
+    messages: Vec<(String, String)>,
+    stream: &str,
+    group: &str,
+    dlq: &str,
+    max_retries: u32,
+    base_backoff_ms: u64,
+    process: &F,
+) where
+    J: DeserializeOwned,
+    F: Fn(J) -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    for (id, payload) in messages {
+        match queue.retry_delay_remaining_ms(stream, &id).await {
+            Ok(Some(remaining_ms)) => {
+                tracing::debug!(stream, id, remaining_ms, "Skipping job until retry delay expires");
+                continue;
+            }
+            Ok(None) => {}
+            Err(e) => tracing::warn!(stream, id, "Failed to read retry delay: {e}"),
+        }
+
+        match serde_json::from_str::<J>(&payload) {
+            Ok(job) => match process(job).await {
+                Ok(()) => {
+                    if let Err(e) = queue.clear_retry_count(stream, &id).await {
+                        tracing::warn!(stream, id, "Failed to clear retry count: {e}");
                     }
+                    if let Err(e) = queue.clear_retry_delay(stream, &id).await {
+                        tracing::warn!(stream, id, "Failed to clear retry delay: {e}");
+                    }
+                    if let Err(e) = queue.acknowledge(stream, group, &id).await {
+                        tracing::error!(stream, "Failed to ack {id}: {e}");
+                    }
+                }
+                Err(e) => {
+                    if e.downcast_ref::<NonRetryable>().is_some() {
+                        tracing::error!(stream, id, "Non-retryable error, routing to DLQ immediately: {e}");
+                        if let Err(ce) = queue.clear_retry_count(stream, &id).await {
+                            tracing::warn!(stream, id, "Failed to clear retry count: {ce}");
+                        }
+                        if let Err(delay_err) = queue.clear_retry_delay(stream, &id).await {
+                            tracing::warn!(stream, id, "Failed to clear retry delay: {delay_err}");
+                        }
+                        match queue.move_to_dlq(dlq, &payload).await {
+                            Ok(_) => { let _ = queue.acknowledge(stream, group, &id).await; }
+                            Err(dlq_err) => tracing::error!(stream, "DLQ write failed: {dlq_err}"),
+                        }
+                        continue;
+                    }
+
+                    // TTL = max_retries * max backoff window (capped at 6 doublings) + buffer
+                    let count_ttl_ms = (max_retries as u64) * base_backoff_ms.max(1) * (1u64 << 6u64.min(max_retries as u64)) * 2;
+                    let attempt = match queue.incr_retry_count(stream, &id, count_ttl_ms).await {
+                        Ok(n) => n,
+                        Err(e) => { tracing::warn!(stream, id, "Failed to increment retry count: {e}"); 1 }
+                    };
+                    if attempt >= max_retries {
+                        tracing::error!(stream, id, attempt, "Max retries reached, routing to DLQ: {e}");
+                        if let Err(ce) = queue.clear_retry_count(stream, &id).await {
+                            tracing::warn!(stream, id, "Failed to clear retry count: {ce}");
+                        }
+                        if let Err(delay_err) = queue.clear_retry_delay(stream, &id).await {
+                            tracing::warn!(stream, id, "Failed to clear retry delay: {delay_err}");
+                        }
+                        match queue.move_to_dlq(dlq, &payload).await {
+                            Ok(_) => { let _ = queue.acknowledge(stream, group, &id).await; }
+                            Err(dlq_err) => tracing::error!(stream, "DLQ write failed: {dlq_err}"),
+                        }
+                    } else {
+                        let jitter = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.subsec_nanos() as u64 % base_backoff_ms.max(1))
+                            .unwrap_or(0);
+                        let backoff = base_backoff_ms.max(1) * (1u64 << (attempt - 1).min(6)) + jitter;
+                        if let Err(delay_err) = queue.set_retry_delay(stream, &id, backoff).await {
+                            tracing::warn!(stream, id, "Failed to persist retry delay: {delay_err}");
+                        }
+                        tracing::warn!(stream, id, attempt, backoff_ms = backoff, "Job failed and will be reclaimed after retry delay: {e}");
+                    }
+                }
+            },
+            Err(e) => {
+                tracing::error!(stream, "Failed to deserialize job: {e}");
+                if let Err(delay_err) = queue.clear_retry_delay(stream, &id).await {
+                    tracing::warn!(stream, id, "Failed to clear retry delay: {delay_err}");
+                }
+                match queue.move_to_dlq(dlq, &payload).await {
+                    Ok(_) => { let _ = queue.acknowledge(stream, group, &id).await; }
+                    Err(dlq_err) => tracing::error!(stream, "DLQ write failed, message will redeliver: {dlq_err}"),
                 }
             }
         }

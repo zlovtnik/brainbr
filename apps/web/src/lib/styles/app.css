@@ -27,6 +27,11 @@
 	box-sizing: border-box;
 }
 
+:global(details),
+:global(summary) {
+	color-scheme: dark;
+}
+
 :global(a) {
 	color: inherit;
 	text-decoration-thickness: 0.08em;
@@ -128,30 +133,34 @@
 }
 
 :global(.skip-link) {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+:global(.skip-link:focus),
+:global(.skip-link:active) {
 	position: fixed;
 	top: var(--space-3);
 	left: var(--space-4);
+	width: auto;
+	height: auto;
 	padding: var(--space-2) var(--space-4);
+	margin: 0;
+	overflow: visible;
+	clip-path: none;
+	white-space: normal;
 	border-radius: var(--radius-sm);
 	background: var(--bg-2);
 	color: var(--text);
 	border: 1px solid var(--border-strong);
 	z-index: 9999;
-	clip-path: inset(50%);
-	white-space: nowrap;
-	overflow: hidden;
-	width: 1px;
-	height: 1px;
-}
-
-:global(.skip-link:focus),
-:global(.skip-link:active) {
-	clip: auto;
-	clip-path: none;
-	white-space: normal;
-	overflow: visible;
-	width: auto;
-	height: auto;
 }
 
 :global(#rss-app) {

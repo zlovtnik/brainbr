@@ -15,7 +15,9 @@
 	{#snippet children()}
 		<p>Panel body</p>
 	{/snippet}
-	{#snippet meta()}
-		{metaText}
-	{/snippet}
+	{#if metaText?.trim()}
+		{#snippet meta()}
+			{metaText}
+		{/snippet}
+	{/if}
 </SectionPanel>

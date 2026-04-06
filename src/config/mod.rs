@@ -78,6 +78,9 @@ pub struct WorkerConfig {
     /// Re-ingest shared KB rows not updated within this many milliseconds.
     /// Default: 604_800_000 (7 days).
     pub reingest_staleness_ms: u64,
+    /// Minimum idle time (ms) before a pending message is reclaimed by another worker.
+    /// Default: 30_000 (30 s). Should be larger than the maximum expected processing time.
+    pub reclaim_idle_threshold_ms: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -103,9 +106,15 @@ impl AppConfig {
                 openai_base_url: optional("APP_PROVIDERS_OPENAI_BASE_URL", "https://api.openai.com/v1"),
                 openai_api_key: optional("APP_PROVIDERS_OPENAI_API_KEY", ""),
                 provider_mode: optional("MODEL_PROVIDER_MODE", "real"),
-                audit_min_confidence: optional("AUDIT_MIN_CONFIDENCE", "0.5")
-                    .parse()
-                    .context("AUDIT_MIN_CONFIDENCE must be a float between 0 and 1")?,
+                audit_min_confidence: {
+                    let v: f64 = optional("AUDIT_MIN_CONFIDENCE", "0.5")
+                        .parse()
+                        .context("AUDIT_MIN_CONFIDENCE must be a float between 0 and 1")?;
+                    if !(0.0..=1.0).contains(&v) {
+                        anyhow::bail!("AUDIT_MIN_CONFIDENCE must be a float between 0 and 1");
+                    }
+                    v
+                },
             },
             queue: QueueConfig {
                 stream_ingestion: optional("APP_QUEUE_STREAM_INGESTION", "queue_ingestion"),
@@ -125,6 +134,7 @@ impl AppConfig {
                 transition_refresh_interval_ms: optional("WORKER_TRANSITION_REFRESH_INTERVAL_MS", "3600000").parse().context("WORKER_TRANSITION_REFRESH_INTERVAL_MS must be a number")?,
                 reingest_interval_ms: optional("WORKER_REINGEST_INTERVAL_MS", "86400000").parse().context("WORKER_REINGEST_INTERVAL_MS must be a number")?,
                 reingest_staleness_ms: optional("WORKER_REINGEST_STALENESS_MS", "604800000").parse().context("WORKER_REINGEST_STALENESS_MS must be a number")?,
+                reclaim_idle_threshold_ms: optional("WORKER_RECLAIM_IDLE_THRESHOLD_MS", "30000").parse().context("WORKER_RECLAIM_IDLE_THRESHOLD_MS must be a number")?,
             },
             security: SecurityConfig {
                 jwt_issuer_uri: env::var("APP_SECURITY_JWT_ISSUER_URI").ok().filter(|s| !s.is_empty()),
