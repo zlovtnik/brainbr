@@ -77,7 +77,12 @@ sub _item_url {
 
   for my $key (qw(url link href urlVisualizacao urlTexto detail_url)) {
     next unless defined $item->{$key} && length $item->{$key};
-    return $self->absolute_url($base_url, $item->{$key});
+    my $abs = eval { $self->absolute_url($base_url, $item->{$key}) };
+    if ($@) {
+      $self->_log(warn => 'Skipping malformed URL', { key => $key, value => $item->{$key} });
+      next;
+    }
+    return $abs;
   }
 
   return;

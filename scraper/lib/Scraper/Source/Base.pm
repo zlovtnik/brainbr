@@ -114,7 +114,13 @@ sub fetch_json {
   my ($self, $url, $request_id) = @_;
   my $response = $self->fetch_response($url, $request_id);
   return $response if $response->{skip};
-  $response->{json} = decode_json($response->{body});
+  my $decoded = eval { decode_json($response->{body}) };
+  if ($@) {
+    $response->{skip}       = 1;
+    $response->{json_error} = "$@";
+    return $response;
+  }
+  $response->{json} = $decoded;
   return $response;
 }
 

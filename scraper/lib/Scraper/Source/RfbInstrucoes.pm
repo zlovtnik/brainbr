@@ -57,7 +57,8 @@ sub extract_index_links {
     next if $href =~ /\A(?:mailto|javascript):/i;
 
     my $text = clean_text($anchor->all_text);
-    next unless $href =~ /instr|normativa|consulta/i || $text =~ /instruc(?:ao|oes).*normativa/i;
+    next unless $href =~ /instr|normativa|consulta/i
+      || $text =~ /instru(?:c|\x{00e7})(?:ao|\x{00e3}o|oes|\x{00f5}es).*normativa/i;
 
     my $absolute = eval { $self->absolute_url($base_url, $href) };
     next unless $absolute;
