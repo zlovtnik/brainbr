@@ -7,8 +7,9 @@ use uuid::Uuid;
 
 use crate::api::middleware::error::AppError;
 use crate::api::middleware::tenant::set_rls_session;
-use crate::config::ModelsConfig;
-use crate::services::pipeline::NonRetryable;
+use crate::config::{AppConfig, ModelsConfig};
+use crate::queue::RedisQueueClient;
+use crate::services::pipeline::{AuditJob, NonRetryable};
 use crate::services::rag::RagService;
 use crate::services::transition::math::compute_risk_score;
 
@@ -77,7 +78,9 @@ impl AuditService {
     ) -> anyhow::Result<()> {
         // 1. Load SKU — begin transaction and enable RLS first
         let mut tx = pool.begin().await?;
-        set_rls_session(&mut tx, job.company_id).await.map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        set_rls_session(&mut tx, job.company_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
         let sku = sqlx::query(
             "SELECT sku_id, description, ncm_code, origin_state, destination_state, legacy_taxes \
@@ -97,12 +100,23 @@ impl AuditService {
         tx.commit().await?;
 
         // 2. RAG: embed → retrieve → LLM → validate (runs outside the write tx)
-        let rag = RagService::audit(pool, cfg, job.company_id, &ncm_code, &description, &origin_state, &destination_state).await?;
+        let rag = RagService::audit(
+            pool,
+            cfg,
+            job.company_id,
+            &ncm_code,
+            &description,
+            &origin_state,
+            &destination_state,
+        )
+        .await?;
 
         // 2a. Confidence threshold gate
         if rag.audit_confidence < cfg.audit_min_confidence {
             let mut tx = pool.begin().await?;
-            set_rls_session(&mut tx, job.company_id).await.map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            set_rls_session(&mut tx, job.company_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
             sqlx::query(
                 r#"INSERT INTO fiscal_audit_log
                    (company_id, sku_id, event_type, actor, request_id, event_payload)
@@ -113,6 +127,7 @@ impl AuditService {
             .bind(&job.request_id)
             .bind(serde_json::json!({
                 "job_id": job.job_id,
+                "requested_by": job.requested_by,
                 "ncm_code": ncm_code,
                 "audit_confidence": rag.audit_confidence,
                 "min_confidence": cfg.audit_min_confidence,
@@ -133,17 +148,23 @@ impl AuditService {
         }
 
         // 3. Compute risk score
-        let legacy_sum: f64 = legacy_taxes.as_object()
+        let legacy_sum: f64 = legacy_taxes
+            .as_object()
             .map(|m| m.values().filter_map(|v| v.as_f64()).sum())
             .unwrap_or(0.0);
-        let reform_sum: f64 = rag.reform_taxes.as_object()
+        let reform_sum: f64 = rag
+            .reform_taxes
+            .as_object()
             .map(|m| m.values().filter_map(|v| v.as_f64()).sum())
             .unwrap_or(0.0);
         let risk_score = compute_risk_score(legacy_sum, reform_sum, Some(rag.audit_confidence));
 
         // 4. Build explainability artifact
         let run_id = Uuid::new_v4();
-        let job_id_uuid: Uuid = job.job_id.parse().map_err(|e| anyhow::anyhow!("invalid job_id UUID: {e}"))?;
+        let job_id_uuid: Uuid = job
+            .job_id
+            .parse()
+            .map_err(|e| anyhow::anyhow!("invalid job_id UUID: {e}"))?;
         let artifact_version = "1.0.0";
         let schema_version = "rag-output-v1";
         let source_snapshot = serde_json::json!({
@@ -157,6 +178,7 @@ impl AuditService {
             "origin_state": origin_state,
             "destination_state": destination_state,
             "job_id": job.job_id,
+            "requested_by": job.requested_by,
             "attempt": job.attempt,
         });
         let rag_output = serde_json::json!({
@@ -166,14 +188,16 @@ impl AuditService {
             "source": source_snapshot,
         });
         let artifact_digest = {
-            use sha2::{Sha256, Digest};
+            use sha2::{Digest, Sha256};
             let raw = serde_json::to_string(&rag_output).unwrap_or_default();
             hex::encode(Sha256::digest(raw.as_bytes()))
         };
 
         // 5. Persist — open a fresh write transaction with RLS
         let mut tx = pool.begin().await?;
-        set_rls_session(&mut tx, job.company_id).await.map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        set_rls_session(&mut tx, job.company_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
         // Insert explainability run
         sqlx::query(
@@ -236,6 +260,7 @@ impl AuditService {
         .bind(&artifact_digest)
         .bind(serde_json::json!({
             "job_id": job.job_id,
+            "requested_by": job.requested_by,
             "ncm_code": ncm_code,
             "audit_confidence": rag.audit_confidence,
             "risk_score": risk_score,
@@ -250,12 +275,16 @@ impl AuditService {
 
     pub async fn enqueue_sku_audit(
         pool: &PgPool,
+        app_cfg: &AppConfig,
         company_id: Uuid,
         sku_id: &str,
+        requested_by: Option<&str>,
         request_id: Option<&str>,
     ) -> Result<ReAuditResponse, AppError> {
         let mut tx = pool.begin().await?;
-        set_rls_session(&mut tx, company_id).await.map_err(AppError::Database)?;
+        set_rls_session(&mut tx, company_id)
+            .await
+            .map_err(AppError::Database)?;
 
         let exists = sqlx::query(
             "SELECT 1 FROM inventory_transition WHERE company_id=$1 AND sku_id=$2 AND is_active=TRUE"
@@ -267,23 +296,109 @@ impl AuditService {
             tx.rollback().await?;
             return Err(AppError::NotFound(format!("SKU {sku_id} not found")));
         }
+        tx.commit().await?;
 
         let job_id = Uuid::new_v4();
-        sqlx::query(
-            r#"INSERT INTO fiscal_audit_log (company_id, sku_id, event_type, actor, request_id, event_payload)
-               VALUES ($1, $2, 'RE_AUDIT_QUEUED', 'api', $3, $4::jsonb)"#
-        )
-        .bind(company_id).bind(sku_id).bind(request_id)
-        .bind(serde_json::json!({ "job_id": job_id, "status": "queued" }))
-        .execute(&mut *tx).await?;
+        let created_at = Utc::now();
+        let requested_by = requested_by.map(str::to_string);
+        let job = AuditJob {
+            job_id: job_id.to_string(),
+            company_id,
+            sku_id: sku_id.to_string(),
+            requested_by: requested_by.clone(),
+            request_id: request_id.map(str::to_string),
+            attempt: 0,
+            created_at,
+        };
 
-        tx.commit().await?;
-        Ok(ReAuditResponse { job_id: job_id.to_string(), status: "queued".into() })
+        let mut queue = RedisQueueClient::new(&app_cfg.redis_url, &app_cfg.queue)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create Redis queue client for re-audit");
+                AppError::ServiceUnavailable("Unable to reach the audit queue".into())
+            })?;
+
+        let stream = queue.audit_stream.clone();
+        let message_id = match queue.enqueue(&stream, &job).await {
+            Ok(message_id) => message_id,
+            Err(e) => {
+                tracing::error!(
+                    job_id = %job_id,
+                    company_id = %company_id,
+                    sku_id = %sku_id,
+                    error = %e,
+                    "Failed to publish re-audit job to Redis"
+                );
+                if let Err(log_err) = insert_audit_event(
+                    pool,
+                    company_id,
+                    sku_id,
+                    "RE_AUDIT_QUEUE_FAILED",
+                    request_id,
+                    serde_json::json!({
+                        "job_id": job_id,
+                        "status": "failed",
+                        "requested_by": requested_by.clone(),
+                        "queue_stream": stream,
+                        "error": e.to_string(),
+                    }),
+                )
+                .await
+                {
+                    tracing::error!(
+                        job_id = %job_id,
+                        company_id = %company_id,
+                        sku_id = %sku_id,
+                        error = %log_err,
+                        "Failed to append re-audit queue failure audit log"
+                    );
+                }
+                return Err(AppError::ServiceUnavailable(
+                    "Unable to enqueue the re-audit job".into(),
+                ));
+            }
+        };
+
+        if let Err(log_err) = insert_audit_event(
+            pool,
+            company_id,
+            sku_id,
+            "RE_AUDIT_QUEUED",
+            request_id,
+            serde_json::json!({
+                "job_id": job_id,
+                "status": "queued",
+                "requested_by": requested_by,
+                "queue_stream": stream,
+                "queue_message_id": message_id,
+            }),
+        )
+        .await
+        {
+            tracing::error!(
+                job_id = %job_id,
+                company_id = %company_id,
+                sku_id = %sku_id,
+                error = %log_err,
+                "Failed to append re-audit queued audit log after Redis publish"
+            );
+        }
+
+        Ok(ReAuditResponse {
+            job_id: job_id.to_string(),
+            status: "queued".into(),
+        })
     }
 
-    pub async fn explain(pool: &PgPool, company_id: Uuid, sku_id: &str) -> Result<AuditExplainResponse, AppError> {
+    pub async fn explain(
+        pool: &PgPool,
+        company_id: Uuid,
+        sku_id: &str,
+    ) -> Result<AuditExplainResponse, AppError> {
         let mut tx = pool.begin().await?;
-        set_rls_session(&mut tx, company_id).await.map_err(AppError::Database)?;
+        set_rls_session(&mut tx, company_id)
+            .await
+            .map_err(AppError::Database)?;
 
         let r = sqlx::query(
             r#"SELECT i.sku_id, i.reform_taxes, i.audit_confidence, i.llm_model_used,
@@ -292,35 +407,49 @@ impl AuditService {
                FROM inventory_transition i
                LEFT JOIN fiscal_knowledge_chunk c ON c.id = i.vector_id
                LEFT JOIN fiscal_knowledge_base b ON b.id = c.knowledge_id
-               WHERE i.company_id = $1 AND i.sku_id = $2 AND i.is_active = TRUE"#
+               WHERE i.company_id = $1 AND i.sku_id = $2 AND i.is_active = TRUE"#,
         )
-        .bind(company_id).bind(sku_id)
-        .fetch_optional(&mut *tx).await?
+        .bind(company_id)
+        .bind(sku_id)
+        .fetch_optional(&mut *tx)
+        .await?
         .ok_or_else(|| AppError::NotFound(format!("SKU {sku_id} not found")))?;
 
         tx.commit().await?;
 
         let chunk_id: Option<Uuid> = r.get("chunk_id");
         if chunk_id.is_none() {
-            return Err(AppError::NotFound(format!("No audit result found for SKU {sku_id}")));
+            return Err(AppError::NotFound(format!(
+                "No audit result found for SKU {sku_id}"
+            )));
         }
 
         Ok(AuditExplainResponse {
             sku_id: r.get("sku_id"),
             reform_taxes: r.get("reform_taxes"),
             audit_confidence: r.get::<Option<f64>, _>("audit_confidence").unwrap_or(0.0),
-            llm_model_used: r.get::<Option<String>, _>("llm_model_used").unwrap_or_default(),
+            llm_model_used: r
+                .get::<Option<String>, _>("llm_model_used")
+                .unwrap_or_default(),
             source: AuditSource {
                 law_ref: r.get::<Option<String>, _>("law_ref").unwrap_or_default(),
-                content: r.get::<Option<String>, _>("chunk_content").unwrap_or_default(),
+                content: r
+                    .get::<Option<String>, _>("chunk_content")
+                    .unwrap_or_default(),
                 source_url: r.get("source_url"),
             },
         })
     }
 
-    pub async fn explain_latest_artifact(pool: &PgPool, company_id: Uuid, sku_id: &str) -> Result<AuditExplainabilityArtifactResponse, AppError> {
+    pub async fn explain_latest_artifact(
+        pool: &PgPool,
+        company_id: Uuid,
+        sku_id: &str,
+    ) -> Result<AuditExplainabilityArtifactResponse, AppError> {
         let mut tx = pool.begin().await?;
-        set_rls_session(&mut tx, company_id).await.map_err(AppError::Database)?;
+        set_rls_session(&mut tx, company_id)
+            .await
+            .map_err(AppError::Database)?;
 
         let r = sqlx::query(
             r#"SELECT id, sku_id, job_id, request_id, artifact_version, schema_version, llm_model_used,
@@ -337,10 +466,18 @@ impl AuditService {
         Ok(row_to_artifact(&r))
     }
 
-    pub async fn explain_artifact_by_run_id(pool: &PgPool, company_id: Uuid, run_id: &str) -> Result<AuditExplainabilityArtifactResponse, AppError> {
-        let run_uuid = run_id.parse::<Uuid>().map_err(|_| AppError::BadRequest("Invalid run_id format".into()))?;
+    pub async fn explain_artifact_by_run_id(
+        pool: &PgPool,
+        company_id: Uuid,
+        run_id: &str,
+    ) -> Result<AuditExplainabilityArtifactResponse, AppError> {
+        let run_uuid = run_id
+            .parse::<Uuid>()
+            .map_err(|_| AppError::BadRequest("Invalid run_id format".into()))?;
         let mut tx = pool.begin().await?;
-        set_rls_session(&mut tx, company_id).await.map_err(AppError::Database)?;
+        set_rls_session(&mut tx, company_id)
+            .await
+            .map_err(AppError::Database)?;
 
         let r = sqlx::query(
             r#"SELECT id, sku_id, job_id, request_id, artifact_version, schema_version, llm_model_used,
@@ -365,15 +502,19 @@ impl AuditService {
         k: i64,
         filters: Option<serde_json::Value>,
     ) -> Result<AuditQueryResponse, AppError> {
-        let state_filter = filters.as_ref()
+        let state_filter = filters
+            .as_ref()
             .and_then(|f| f["state"].as_str())
             .map(String::from);
 
-        let embedding = RagService::embed(cfg, query).await
+        let embedding = RagService::embed(cfg, query)
+            .await
             .map_err(|e| AppError::Internal(anyhow::anyhow!("embedding failed: {e}")))?;
 
-        let chunks = RagService::vector_search(pool, company_id, &embedding, k, state_filter.as_deref()).await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("vector search failed: {e}")))?;
+        let chunks =
+            RagService::vector_search(pool, company_id, &embedding, k, state_filter.as_deref())
+                .await
+                .map_err(|e| AppError::Internal(anyhow::anyhow!("vector search failed: {e}")))?;
 
         let results = chunks.into_iter().map(|c| AuditQueryResult {
             id: c.chunk_id.to_string(),
@@ -387,6 +528,33 @@ impl AuditService {
     }
 }
 
+async fn insert_audit_event(
+    pool: &PgPool,
+    company_id: Uuid,
+    sku_id: &str,
+    event_type: &str,
+    request_id: Option<&str>,
+    event_payload: serde_json::Value,
+) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+    set_rls_session(&mut tx, company_id)
+        .await
+        .map_err(AppError::Database)?;
+    sqlx::query(
+        r#"INSERT INTO fiscal_audit_log (company_id, sku_id, event_type, actor, request_id, event_payload)
+           VALUES ($1, $2, $3, 'api', $4, $5::jsonb)"#,
+    )
+    .bind(company_id)
+    .bind(sku_id)
+    .bind(event_type)
+    .bind(request_id)
+    .bind(event_payload)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 fn row_to_artifact(r: &sqlx::postgres::PgRow) -> AuditExplainabilityArtifactResponse {
     let source_snapshot: serde_json::Value = r.get("source_snapshot");
     AuditExplainabilityArtifactResponse {
@@ -394,11 +562,22 @@ fn row_to_artifact(r: &sqlx::postgres::PgRow) -> AuditExplainabilityArtifactResp
         sku_id: r.get("sku_id"),
         job_id: r.get::<Uuid, _>("job_id").to_string(),
         request_id: r.get("request_id"),
-        artifact_version: r.get::<Option<String>, _>("artifact_version").unwrap_or_default(),
-        schema_version: r.get::<Option<String>, _>("schema_version").unwrap_or_default(),
-        artifact_digest: r.get::<Option<String>, _>("artifact_digest").unwrap_or_default(),
-        llm_model_used: r.get::<Option<String>, _>("llm_model_used").unwrap_or_default(),
-        vector_id: r.get::<Option<Uuid>, _>("vector_id").map(|u| u.to_string()).unwrap_or_default(),
+        artifact_version: r
+            .get::<Option<String>, _>("artifact_version")
+            .unwrap_or_default(),
+        schema_version: r
+            .get::<Option<String>, _>("schema_version")
+            .unwrap_or_default(),
+        artifact_digest: r
+            .get::<Option<String>, _>("artifact_digest")
+            .unwrap_or_default(),
+        llm_model_used: r
+            .get::<Option<String>, _>("llm_model_used")
+            .unwrap_or_default(),
+        vector_id: r
+            .get::<Option<Uuid>, _>("vector_id")
+            .map(|u| u.to_string())
+            .unwrap_or_default(),
         audit_confidence: r.get::<Option<f64>, _>("audit_confidence").unwrap_or(0.0),
         source: AuditSource {
             law_ref: source_snapshot["law_ref"].as_str().unwrap_or("").into(),

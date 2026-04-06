@@ -6,17 +6,26 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::api::middleware::{error::AppError, tenant::TenantId};
+use crate::api::middleware::{auth::AuthenticatedClaims, error::AppError, tenant::TenantId};
 use crate::api::AppState;
 use crate::services::audit::AuditService;
 
 pub async fn re_audit(
     State(s): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(claims): Extension<AuthenticatedClaims>,
     Path(sku_id): Path<String>,
     Extension(request_id): Extension<Option<String>>,
 ) -> Result<impl IntoResponse, AppError> {
-    let result = AuditService::enqueue_sku_audit(&s.pool, tenant.0, &sku_id, request_id.as_deref()).await?;
+    let result = AuditService::enqueue_sku_audit(
+        &s.pool,
+        s.config.as_ref(),
+        tenant.0,
+        &sku_id,
+        Some(claims.sub.as_str()),
+        request_id.as_deref(),
+    )
+    .await?;
     Ok((StatusCode::ACCEPTED, Json(result)))
 }
 
@@ -54,13 +63,23 @@ pub struct QueryRequest {
     pub k: i64,
     pub filters: Option<serde_json::Value>,
 }
-fn default_k() -> i64 { 5 }
+fn default_k() -> i64 {
+    5
+}
 
 pub async fn query(
     State(s): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Json(body): Json<QueryRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let result = AuditService::query(&s.pool, &s.config.models, tenant.0, &body.query, body.k, body.filters).await?;
+    let result = AuditService::query(
+        &s.pool,
+        &s.config.models,
+        tenant.0,
+        &body.query,
+        body.k,
+        body.filters,
+    )
+    .await?;
     Ok(Json(result))
 }

@@ -1,100 +1,266 @@
 # Architecture
 
-## Runtime topology
+This document reflects the implementation in this repository as of 2026-04-06. It replaces earlier references to Spring Boot and Camel; the current runtime is Rust, SvelteKit, PostgreSQL, Redis, and a standalone Perl scraper.
 
-- `api` service: Spring Boot REST application.
-- `worker` service: Spring Boot worker profile with Apache Camel routes for ingestion, RAG audits, and maintenance jobs.
-- `db` service: PostgreSQL 16 with `pgvector`.
-- `redis` service: queue/cache integration for worker workflows.
+## Architectural Goals
 
-## Core modules
+- Enforce tenant isolation at the application and database layers.
+- Preserve explainability for every generated reform-tax result.
+- Keep legal ingestion asynchronous and read paths fast.
+- Separate tenant-owned operational data from legal-source knowledge data.
+- Prefer append-only audit records for traceability.
 
-- `src/ingestion`: source acquisition, chunking, embedding, upsert.
-- `src/rag`: retrieval, prompt construction, LLM invocation, response validation.
-- `src/fiscal`: transition calendar and effective-rate calculations.
-- `src/api`: REST routes and dependency wiring.
-- `src/models`: persistence/domain models and request/response contracts.
+## System Context
 
-## Data flow
+```mermaid
+flowchart LR
+    User["Operator"]
+    Browser["Browser"]
+    Web["SvelteKit Web App<br/>apps/web"]
+    API["Rust API<br/>src/main.rs"]
+    Worker["Rust Worker<br/>src/worker/main.rs"]
+    Scraper["Perl Scraper<br/>scraper/"]
+    Redis[("Redis Streams")]
+    Postgres[("PostgreSQL 16 + pgvector")]
+    OIDC["OIDC / JWKS issuer"]
+    Models["OpenAI-compatible provider"]
+    Sources["Regulatory sources"]
 
-1. Law text is ingested into `fiscal_knowledge_base` with tenant scoping and provenance metadata.
-2. SKU is created in `inventory_transition` and queued for automated tax reform analysis.
-3. RAG audit retrieves top-K law chunks, generates `reform_taxes`, validates strict schemas, and stores explainability payload (`vector_id`, `law_ref`, `llm_model_used`, `audit_confidence`).
-4. API exposes tenant-scoped inventory views, explainability, and transition calculations.
-5. Materialized dashboard view is refreshed by scheduled worker and consumed by reporting endpoints.
+    User --> Browser
+    Browser --> Web
+    Web --> API
+    API --> OIDC
+    API --> Postgres
+    Worker --> Redis
+    Worker --> Postgres
+    Worker --> Models
+    Scraper --> Sources
+    Scraper --> Redis
+```
 
-Enabled capabilities include automated reform impact analysis, auditable explainability responses, and tenant-safe retrieval over legal corpus.
+## Runtime Topology
 
-## Scaling controls
+```mermaid
+flowchart TB
+    subgraph Edge
+        Browser["Browser"]
+        Web["SvelteKit SSR UI"]
+    end
 
-- Queue separation: `queue_ingestion`, `queue_audit`, `queue_reporting`.
-- HNSW vector index for ANN search with periodic maintenance windows.
-- Index strategy for tenant and NCM-heavy lookup patterns.
-- Avoid global full refreshes where incremental refresh is feasible.
+    subgraph Services
+        API["Axum API"]
+        Worker["Tokio worker"]
+        Scraper["Perl scraper"]
+    end
 
-## Security controls
+    subgraph Data
+        Redis[("Redis")]
+        Postgres[("PostgreSQL + pgvector")]
+    end
 
-- Authentication and authorization:
-  - Supported auth mechanisms are OAuth2/JWT bearer and API keys for service clients.
-  - Authorization uses tenant-scoped RBAC/scopes aligned with endpoint permissions.
-- Tenant identity derivation:
-  - `app.current_company_id` must be derived server-side from verified auth/session context only.
-  - Client payload/query/header tenant values are never authoritative.
-- Transport and storage protection:
-  - TLS required for all inter-service communication.
-  - Encryption at rest required for PostgreSQL data, Redis persistence snapshots (if enabled), backups, and sensitive log storage.
-- Input and API security:
-  - Validate and sanitize user-supplied input for SQL injection, XSS, and malformed payloads.
-  - Maintain CORS allowlist, API authentication, and per-tenant rate limiting.
-- LLM-specific controls:
-  - Prompt-injection mitigation rules on retrieval/prompt composition.
-  - PII redaction before prompt/log persistence.
-  - Harmful-content filtering and safe-fail response path.
-- Secrets and auditability:
-  - Secrets sourced from secret manager/environment only.
-  - Rotation policy applies to DB credentials, API keys, and encryption keys with audit trail for every rotation event.
-- Network posture:
-  - VPC segmentation, service firewalls, and least-privilege network/service access.
-- Change management rule:
-  - Any change to authentication, persistence, or migration strategy must update this architecture document in the same change set.
+    subgraph External
+        OIDC["JWT issuer / JWKS"]
+        Models["Embedding + LLM provider"]
+        Sources["Regulatory websites"]
+    end
 
-## Operational readiness
+    Browser --> Web
+    Web --> API
+    API --> OIDC
+    API --> Postgres
+    Worker --> Redis
+    Worker --> Postgres
+    Worker --> Models
+    Scraper --> Sources
+    Scraper --> Redis
+```
 
-- Architecture diagrams:
-  - Keep C4-style system/container diagrams current and linked from this section.
-  - See [Runtime topology](#runtime-topology) and [Core modules](#core-modules) for component mapping.
-- Monitoring and alerting:
-  - Core metrics: request latency (p50/p95/p99), error rates, queue depth, worker failure rates, RAG validation failures, DB connection saturation.
-  - SLO starter thresholds: API availability >= 99.9% monthly, `POST /inventory/sku` p95 < 300ms ack time, explain endpoint p95 < 500ms.
-  - Alerting thresholds: sustained p95 breaches over 10 minutes, ingestion/re-audit dead-letter growth, repeated schema-validation failures.
-- Disaster recovery:
-  - Postgres: daily full backups + WAL/incremental backups, validated restore drills.
-  - Redis: snapshot/AOF strategy per environment with documented restore process.
-  - Target RTO: 60 minutes. Target RPO: 15 minutes.
-- Performance targets:
-  - API read endpoints p95 < 500ms under nominal load.
-  - Audit query endpoint p95 < 1500ms for default `k=5`.
-  - Worker throughput target documented by queue type and reviewed each release.
+## Containers And Ownership
 
-## Development workflow
+| Runtime | Code | Role |
+| --- | --- | --- |
+| Web UI | `apps/web` | Signed session cookie, route protection, SSR page loads, form actions, API proxying with bearer token |
+| API | `src/api`, `src/main.rs` | Health endpoints, JWT validation, tenant resolution, inventory, transition, audit, ingestion, split-payment routes |
+| Worker | `src/worker/main.rs`, `src/services/*` | Consumes Redis streams, runs embeddings and RAG work, persists explainability artifacts, refreshes reporting state |
+| Scraper | `scraper/` | Polls external sources and writes `IngestionJob` payloads to Redis |
+| PostgreSQL | `migrations/` | Tenant data, knowledge base, vector chunks, audit trail, explainability, transition tables, split-payment records |
+| Redis | configured in `src/config/mod.rs` | Stream transport for ingestion and audit jobs plus retry bookkeeping |
 
-- Local setup:
-  1. Copy `.env.example` to `.env` and set required secrets.
-  2. Start stack via Docker Compose.
-  3. Run migrations and execute tests before opening PR.
-- Testing strategy:
-  - Unit tests for business rules, validators, and transition math.
-  - Integration tests for DB/RLS + API routes + migration behavior.
-  - End-to-end tests for ingestion -> RAG -> explainability flows.
-  - See [Data flow](#data-flow) and [Security controls](#security-controls) for required assertions.
-- CI/CD overview:
-  - PR checks run lint/compile/test/migration verification.
-  - Main branch merges trigger container build and staged deployment pipeline.
-  - Production promotion requires SLO/alert posture review.
-- Known limitations:
-  - Endpoint surface is being delivered incrementally by phase.
-  - Some compliance controls are phase-gated and tracked in backlog.
-- Glossary:
-  - `NCM`: Brazilian product classification code used in fiscal rules.
-  - `SKU`: stock keeping unit identifier in tenant inventory.
-  - `reform_taxes`: structured tax payload generated by RAG audit for reform regime fields.
+## Core Domain Boundaries
+
+### Tenant Operational Data
+
+- `companies`
+- `inventory_transition`
+- `split_payment_events`
+- `fiscal_audit_log`
+- `audit_explainability_run`
+
+These tables are tenant-scoped and accessed through row-level security using `app.current_company_id`.
+
+### Knowledge And Retrieval Data
+
+- `fiscal_knowledge_base`
+- `fiscal_knowledge_chunk`
+
+These tables back retrieval and explainability. The worker writes them during ingestion, and audit/query paths read them using pgvector similarity search.
+
+### Reference Data
+
+- `transition_calendar`
+
+This is migration-seeded reference data for the 2026-2033 transition schedule.
+
+## Security And Tenancy Model
+
+- JWT bearer auth is enforced in Axum middleware when `APP_SECURITY_JWT_ENABLED=true`.
+- JWKS can be loaded directly or discovered from the issuer metadata endpoint.
+- Tenant identity is derived from the verified JWT tenant claim and then checked against `companies`.
+- Request handlers open a transaction and call `set_config('app.current_company_id', ...)` before tenant-scoped queries.
+- RLS is enabled on tenant-owned tables, and audit-oriented tables are append-only where appropriate.
+- The SvelteKit app stores the JWT in a signed, HTTP-only session cookie and forwards it to the API on server-side requests.
+
+## Flow Graphs
+
+### 1. Authenticated Web Request
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant B as Browser
+    participant W as SvelteKit
+    participant A as Axum API
+    participant J as JWKS / OIDC
+    participant P as PostgreSQL
+
+    U->>B: Open /inventory
+    B->>W: GET /inventory with session cookie
+    W->>W: Read and verify signed cookie
+    W->>A: GET /api/v1/inventory/sku<br/>Authorization: Bearer JWT
+    A->>J: Resolve and validate signing key
+    A->>P: Resolve tenant claim against companies
+    A->>P: BEGIN + set app.current_company_id
+    A->>P: SELECT inventory rows under RLS
+    P-->>A: Tenant-scoped data
+    A-->>W: JSON response
+    W-->>B: Rendered page
+```
+
+### 2. Ingestion Pipeline
+
+```mermaid
+sequenceDiagram
+    participant S as Regulatory source
+    participant C as Scraper
+    participant R as Redis queue_ingestion
+    participant W as Worker
+    participant M as Embedding provider
+    participant P as PostgreSQL
+
+    C->>S: Poll and normalize source material
+    C->>R: XADD IngestionJob payload
+    W->>R: XREADGROUP / XAUTOCLAIM
+    W->>W: Chunk text and hash content
+    W->>M: Embed chunk batch
+    M-->>W: Embedding vectors
+    W->>P: Upsert fiscal_knowledge_base
+    W->>P: Upsert fiscal_knowledge_chunk
+    W->>P: Append INGESTION_COMPLETE audit event
+```
+
+The ingestion path has two producers: the scraper for automated source polling and the authenticated API endpoint for manual/operator-submitted legislation.
+
+### 3. RAG Audit Execution
+
+```mermaid
+sequenceDiagram
+    participant Q as Audit producer
+    participant R as Redis queue_audit
+    participant W as Worker
+    participant P as PostgreSQL
+    participant M as Embedding + LLM provider
+
+    Q->>R: XADD AuditJob
+    W->>R: XREADGROUP / XAUTOCLAIM
+    W->>P: Load SKU under tenant RLS
+    W->>M: Embed query text
+    W->>P: Vector search on fiscal_knowledge_chunk
+    P-->>W: Top legal chunks
+    W->>M: Generate structured reform tax payload
+    M-->>W: JSON output
+    W->>P: Insert audit_explainability_run
+    W->>P: Update inventory_transition.reform_taxes, vector_id, confidence
+    W->>P: Append RATE_GENERATED audit event
+```
+
+The audit worker path is fed by `AuditJob` payloads published to Redis; the manual re-audit endpoint is one of those producers.
+
+### 4. Read-Time Explainability And Forecasting
+
+```mermaid
+flowchart LR
+    SKU["Tenant SKU"]
+    API["Axum API"]
+    INV[("inventory_transition")]
+    KB[("fiscal_knowledge_chunk / base")]
+    ART[("audit_explainability_run")]
+    CAL[("transition_calendar")]
+
+    SKU --> API
+    API --> INV
+    API --> KB
+    API --> ART
+    API --> CAL
+```
+
+- `GET /api/v1/audit/explain/:sku_id` reads the stored `vector_id` from `inventory_transition`, then joins back to the knowledge tables to return the legal source behind the last audit.
+- `GET /api/v1/audit/explain/:sku_id/artifact/latest` and `GET /api/v1/audit/explain/artifact/runs/:run_id` expose the persisted explainability artifact.
+- `GET /api/v1/transition/calendar`, `GET /api/v1/transition/sku/:sku_id/effective-rate`, and `GET /api/v1/transition/sku/:sku_id/forecast` combine `transition_calendar` with stored `legacy_taxes` and `reform_taxes`.
+
+## Data Ownership By Table
+
+| Table | Primary writer | Primary readers |
+| --- | --- | --- |
+| `inventory_transition` | API inventory routes, worker audit enrichment | API inventory and transition routes |
+| `fiscal_knowledge_base` | worker ingestion | worker retrieval, API explain/query joins |
+| `fiscal_knowledge_chunk` | worker ingestion | worker retrieval, API explain/query joins |
+| `audit_explainability_run` | worker audit path | API compliance/explainability routes |
+| `fiscal_audit_log` | API routes and worker | audit/compliance review and traceability |
+| `split_payment_events` | split-payment API route | split-payment list endpoint |
+| `transition_calendar` | migrations | transition endpoints |
+
+## Queue And Scheduling Model
+
+- `queue_ingestion`
+  - Implemented producers: scraper and `POST /api/v1/ingestion/jobs`.
+  - Implemented consumer: worker ingestion loop.
+- `queue_audit`
+  - Implemented producer: `POST /api/v1/inventory/sku/:sku_id/re-audit`.
+  - Implemented consumer: worker audit loop.
+- `queue_reporting`
+  - Configured but not currently used in a live producer/consumer path.
+- Scheduled jobs inside the worker:
+  - materialized-view refresh timer
+  - stale shared-legislation re-ingestion scan
+  - worker heartbeat logging
+
+## Known Gaps And Mismatches
+
+- The old docs described a Spring Boot and Apache Camel deployment. That is no longer accurate.
+- The current SvelteKit app is a server-side proxy/BFF, not a direct browser-to-API SPA.
+- Reporting is timer-driven today; `queue_reporting` is reserved for future background work.
+
+## Operational Notes
+
+- The API runs migrations on startup.
+- Redis retry tracking uses dedicated keys per stream message for retry count and retry delay.
+- Worker reclaim logic uses `XAUTOCLAIM` to take over idle pending messages.
+- Model calls use an OpenAI-compatible base URL and support `MODEL_PROVIDER_MODE=mock` for non-live development paths.
+
+## Where To Go Next
+
+- [Data Model](data-model.md)
+- [API Contract](api-contract.md)
+- [Development Guide](development-guide.md)
+- [Operations and Security](operations-security.md)
+- [Runbooks and SLOs](runbooks-and-slos.md)
