@@ -34,11 +34,20 @@ function sendJson(response, status, body) {
 	response.end(JSON.stringify(body));
 }
 
+const SKU_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
 function getSkuIdFromPath(pathname) {
 	const normalizedPath = pathname.replace(/\/+$/, '');
 	const segments = normalizedPath.split('/').filter(Boolean);
 	const skuSegment = segments.at(-1);
-	return skuSegment ? decodeURIComponent(skuSegment) : '';
+	if (!skuSegment) return '';
+	let decoded;
+	try {
+		decoded = decodeURIComponent(skuSegment);
+	} catch {
+		return null;
+	}
+	return SKU_RE.test(decoded) ? decoded : null;
 }
 
 function requireAuth(request, response) {
@@ -169,7 +178,7 @@ const server = createServer(async (request, response) => {
 			if (!skuId) {
 				return sendJson(response, 400, {
 					error_code: 'BAD_REQUEST',
-					message: 'SKU path segment is required',
+					message: skuId === null ? 'Invalid SKU identifier' : 'SKU path segment is required',
 					request_id: 'mock-req'
 				});
 			}
@@ -189,7 +198,7 @@ const server = createServer(async (request, response) => {
 			if (!skuId) {
 				return sendJson(response, 400, {
 					error_code: 'BAD_REQUEST',
-					message: 'SKU path segment is required',
+					message: skuId === null ? 'Invalid SKU identifier' : 'SKU path segment is required',
 					request_id: 'mock-req'
 				});
 			}

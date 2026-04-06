@@ -30,6 +30,25 @@ export async function resetMockApi(request) {
 	}
 }
 
+const ALLOWED_SCOPES = new Set([
+	'inventory:read', 'inventory:write',
+	'audit:read', 'audit:write',
+	'report:read', 'report:write'
+]);
+
+const SUB_RE = /^[\w-]{1,64}$/;
+const TENANT_RE = /^[\w-]{1,64}$/;
+
+function validateSessionPayload(payload) {
+	if (!SUB_RE.test(payload.sub)) throw new Error(`bootstrapSession: invalid sub "${payload.sub}"`);
+	if (!TENANT_RE.test(payload.tenant_id)) throw new Error(`bootstrapSession: invalid tenant_id "${payload.tenant_id}"`);
+	const scopes = payload.scope.split(' ');
+	for (const s of scopes) {
+		if (!ALLOWED_SCOPES.has(s)) throw new Error(`bootstrapSession: disallowed scope "${s}"`);
+	}
+	return { sub: payload.sub, tenant_id: payload.tenant_id, scope: scopes.join(' ') };
+}
+
 export async function bootstrapSession(
 	page,
 	payload = {
@@ -38,9 +57,10 @@ export async function bootstrapSession(
 		scope: 'inventory:read inventory:write'
 	}
 ) {
+	const safePayload = validateSessionPayload(payload);
 	await page.goto('/auth');
 	await page.getByRole('button', { name: 'Advanced: use token' }).click();
-	await page.getByLabel('Bearer JWT').fill(createToken(payload));
+	await page.getByLabel('Bearer JWT').fill(createToken(safePayload));
 	await page.getByRole('button', { name: 'Start authenticated session' }).click();
 	await expect(page).toHaveURL(/\/platform$/);
 }
