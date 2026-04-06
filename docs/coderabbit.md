@@ -14,8 +14,8 @@ Purpose: give CodeRabbit the project context it needs to review both the Rust ba
 - Every generated rate must carry `vector_id` and `law_ref`; logging should include `request_id` and `company_id`.
 
 ## Backend review checklist (Rust/Axum)
-- **Security/tenancy**: Controllers and services must derive tenant from trusted identity (JWT host/issuer or server lookup), never from request bodies. All DB queries include `company_id`; repository logic should not bypass RLS. Avoid any string concatenated SQL; prefer prepared statements/ORM safety.
-- **Validation & errors**: Use Bean Validation on inputs; respond with clear 4xx on validation/auth failures. Do not leak internal exceptions in 5xx bodies.
+- **Security/tenancy**: Controllers and services must derive tenant from trusted identity (JWT host/issuer or server lookup), never from request bodies. All DB queries include `company_id`; repository logic should not bypass RLS. Avoid any string-concatenated SQL; prefer prepared statements/ORM safety.
+- **Validation & errors**: Validate inputs via Axum extractors and request guards, using serde attribute validation and/or the `validator` crate (or custom `FromRequest`/validator traits) to return clear 4xx errors. Use typed DTOs with serde deserialization checks; derive `Validate` from the `validator` crate or implement `FromRequest` guards for complex rules. Ensure controller/service functions propagate validation errors as structured 4xx responses. Do not leak internal exceptions in 5xx bodies.
 - **Persistence/migrations**: New columns require defaults/migration backfill; ensure unique keys: `(sku_id, company_id)` for inventory and `(law_ref, company_id)` for knowledge. UUIDs via `gen_random_uuid()`. Keep down migrations compatible and idempotent.
 - **Pipelines**: In ingestion/audit flows, preserve idempotency and traceability; queue/worker steps must propagate tenant context and request correlation.
 - **Observability**: Structured logs with request correlation via `tracing`; health endpoints (`/actuator/health`) must stay enabled. Prefer explicit timeouts/retries on outbound calls.

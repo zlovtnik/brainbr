@@ -72,7 +72,7 @@
 	--color-success-soft: var(--success-soft);
 	--color-success-border: var(--success-border);
 	--color-input-bg: var(--bg-2);
-	--color-input-border: #2A3446;
-	--color-input-border-strong: #3B4A63;
+	--color-input-border: var(--border-strong);
+	--color-input-border-strong: #3B4A63; /* intentionally stronger than --border-strong for focused inputs */
 	--color-focus-ring: var(--focus-ring);
 }

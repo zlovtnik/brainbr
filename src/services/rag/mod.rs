@@ -9,6 +9,8 @@ use uuid::Uuid;
 
 use crate::config::ModelsConfig;
 
+const MOCK_EMBEDDING_DIM: usize = 1536;
+
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
     Client::builder()
         .timeout(Duration::from_secs(30))
@@ -94,7 +96,7 @@ impl RagService {
     /// Embed a single text string via OpenAI.
     pub async fn embed(cfg: &ModelsConfig, text: &str) -> anyhow::Result<Vec<f32>> {
         if cfg.provider_mode == "mock" {
-            return Ok(vec![0.0f32; 1536]);
+            return Ok(vec![0.0f32; MOCK_EMBEDDING_DIM]);
         }
         let resp: EmbedResponse = HTTP_CLIENT
             .post(format!("{}/embeddings", cfg.openai_base_url))
@@ -111,7 +113,7 @@ impl RagService {
     /// Embed a batch of texts.
     pub async fn embed_batch(cfg: &ModelsConfig, texts: &[&str]) -> anyhow::Result<Vec<Vec<f32>>> {
         if cfg.provider_mode == "mock" {
-            return Ok(texts.iter().map(|_| vec![0.0f32; 1536]).collect());
+            return Ok(texts.iter().map(|_| vec![0.0f32; MOCK_EMBEDDING_DIM]).collect());
         }
         let resp: EmbedResponse = HTTP_CLIENT
             .post(format!("{}/embeddings", cfg.openai_base_url))

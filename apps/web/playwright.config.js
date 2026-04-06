@@ -21,7 +21,7 @@ export default defineConfig({
 			command: 'bun run build && bun run preview',
 			env: {
 				API_BASE_URL: 'http://127.0.0.1:5050',
-				APP_SESSION_SECRET: process.env.APP_SESSION_SECRET ?? 'test-session-secret-with-extra-entropy-1234567890'
+				APP_SESSION_SECRET: (process.env.APP_SESSION_SECRET?.trim() || 'test-session-secret-with-extra-entropy-1234567890')
 			},
 			port: 4173,
 			timeout: 120000,

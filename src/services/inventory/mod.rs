@@ -38,7 +38,7 @@ impl InventoryListFilters {
             Some("asc") => SortOrder::Asc,
             Some(v) => return Err(AppError::BadRequest(format!("Invalid sort_order: {v}"))),
         };
-        Ok(Self { page, limit, include_inactive, query: query.filter(|s| !s.trim().is_empty()), sort_by, sort_order })
+        Ok(Self { page, limit, include_inactive, query: query.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()), sort_by, sort_order })
     }
 }
 
@@ -80,7 +80,8 @@ impl InventoryService {
         let order_dir = match f.sort_order { SortOrder::Asc => "ASC", SortOrder::Desc => "DESC" };
 
         let sql = format!(
-            r#"SELECT sku_id, description, ncm_code, origin_state, destination_state,
+            r#"SELECT sku_id, COALESCE(description, '') AS description, COALESCE(ncm_code, '') AS ncm_code,
+                      COALESCE(origin_state, '') AS origin_state, COALESCE(destination_state, '') AS destination_state,
                       legacy_taxes, reform_taxes, is_active, updated_at
                FROM inventory_transition
                WHERE company_id = $1
@@ -122,7 +123,7 @@ impl InventoryService {
         set_rls_session(&mut tx, company_id).await.map_err(AppError::Database)?;
 
         let r = sqlx::query(
-            "SELECT sku_id, description, ncm_code, origin_state, destination_state, legacy_taxes, reform_taxes, is_active, updated_at
+            "SELECT sku_id, COALESCE(description, '') AS description, COALESCE(ncm_code, '') AS ncm_code, COALESCE(origin_state, '') AS origin_state, COALESCE(destination_state, '') AS destination_state, legacy_taxes, reform_taxes, is_active, updated_at
              FROM inventory_transition WHERE sku_id = $1 AND company_id = $2 AND (is_active = TRUE OR $3 = TRUE)"
         )
         .bind(sku_id).bind(company_id).bind(include_inactive)
@@ -140,7 +141,8 @@ impl InventoryService {
     }
 
     pub async fn upsert(pool: &PgPool, company_id: Uuid, body: serde_json::Value) -> Result<InventoryWriteResult, AppError> {
-        let sku_id = body["sku_id"].as_str().ok_or_else(|| AppError::BadRequest("sku_id required".into()))?.to_string();
+        let sku_id = body["sku_id"].as_str().ok_or_else(|| AppError::BadRequest("sku_id required".into()))?.trim().to_string();
+        if sku_id.is_empty() { return Err(AppError::BadRequest("sku_id required".into())); }
         let legacy_taxes = body.get("legacy_taxes").cloned().unwrap_or(serde_json::json!({}));
 
         let mut tx = pool.begin().await?;

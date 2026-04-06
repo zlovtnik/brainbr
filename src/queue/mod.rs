@@ -61,6 +61,68 @@ impl RedisQueueClient {
         Ok(id)
     }
 
+    pub async fn reclaim_pending(
+        &mut self,
+        stream: &str,
+        group: &str,
+        consumer: &str,
+        min_idle_ms: u64,
+        count: usize,
+    ) -> anyhow::Result<Vec<(String, String)>> {
+        // XAUTOCLAIM moves idle PEL entries to this consumer and returns them.
+        let results: Vec<redis::Value> = redis::cmd("XAUTOCLAIM")
+            .arg(stream)
+            .arg(group)
+            .arg(consumer)
+            .arg(min_idle_ms)
+            .arg("0-0")
+            .arg("COUNT")
+            .arg(count)
+            .query_async::<Vec<redis::Value>>(&mut self.conn)
+            .await
+            .or_else(|e| {
+                if e.kind() == redis::ErrorKind::TypeError {
+                    Ok(vec![])
+                } else {
+                    Err(e)
+                }
+            })?;
+
+        // XAUTOCLAIM returns [next-id, [[id, fields], ...], [deleted-ids]]
+        let mut messages = Vec::new();
+        if let Some(redis::Value::Array(entries)) = results.get(1) {
+            for entry in entries {
+                if let redis::Value::Array(parts) = entry {
+                    if let (Some(redis::Value::BulkString(id)), Some(redis::Value::Array(fields))) =
+                        (parts.first(), parts.get(1))
+                    {
+                        let id = String::from_utf8_lossy(id).to_string();
+                        let mut payload_found = false;
+                        for chunk in fields.chunks(2) {
+                            if let [redis::Value::BulkString(k), redis::Value::BulkString(v)] = chunk {
+                                if k == b"payload" {
+                                    messages.push((id.clone(), String::from_utf8_lossy(v).to_string()));
+                                    payload_found = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if !payload_found {
+                            tracing::warn!(message_id = %id, "Reclaimed message missing 'payload' — acknowledging");
+                            let _ = redis::cmd("XACK")
+                                .arg(stream)
+                                .arg(group)
+                                .arg(&id)
+                                .query_async::<()>(&mut self.conn)
+                                .await;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(messages)
+    }
+
     pub async fn read_batch(
         &mut self,
         stream: &str,

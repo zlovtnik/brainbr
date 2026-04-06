@@ -4,11 +4,11 @@
 	import '$lib/styles/app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import {
-		capabilityList,
-		getCapabilityAvailability,
 		getCapabilityByPath,
-		getCapabilitySummary
+		getCapabilitySummary,
+		navTree
 	} from '$lib/capabilities';
+	import NavGroup from '$lib/components/NavGroup.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -16,12 +16,6 @@
 	let authenticated = $derived(Boolean(data.session?.authenticated));
 	let activeCapability = $derived(getCapabilityByPath(page.url.pathname));
 	let capabilitySummary = $derived(getCapabilitySummary(data.session));
-	let capabilityNav = $derived(
-		capabilityList.map((capability) => ({
-			...capability,
-			availability: getCapabilityAvailability(capability, data.session?.scopes ?? [])
-		}))
-	);
 
 	afterNavigate(({ from }) => {
 		if (!from) {
@@ -39,14 +33,7 @@
 				: 'Guest'
 	);
 	let homeHref = $derived(authenticated ? '/platform' : '/auth');
-	const capabilityIcons = {
-		platform: '◈',
-		inventory: '◫',
-		audit: '◪',
-		compliance: '◧',
-		'split-payment': '◰',
-		ingestion: '◱'
-	} as const;
+
 </script>
 
 <svelte:head>
@@ -90,32 +77,13 @@
 
 	<div class="shell__layout">
 		<aside class="shell__sidebar">
-			<div class="shell__sidebar-label">Capabilities</div>
-			<nav aria-label="Backend capabilities" class="cap-nav">
-				{#each capabilityNav as capability}
-					<a
-						aria-current={activeCapability?.id === capability.id ? 'page' : undefined}
-						class:cap-nav__link--active={activeCapability?.id === capability.id}
-						class:cap-nav__link--partial={capability.availability === 'partial'}
-						class:cap-nav__link--locked={capability.availability === 'locked'}
-						class="cap-nav__link"
-						href={capability.href}
-					>
-						<span class="cap-nav__title-row">
-							<span class="cap-nav__title-wrap">
-								<span class="cap-nav__icon" aria-hidden="true"
-									>{capabilityIcons[capability.id]}</span
-								>
-								<span class="cap-nav__title">{capability.navLabel}</span>
-							</span>
-							<span class={`cap-nav__badge cap-nav__badge--${capability.availability}`}>
-								{capability.availability === 'public' || capability.availability === 'available'
-									? 'live'
-									: capability.availability}
-							</span>
-						</span>
-					</a>
-				{/each}
+			<div class="shell__sidebar-label">Operations</div>
+			<nav aria-label="Operations navigation">
+				<ul role="tree" class="cap-nav" aria-label="Operations navigation">
+					{#each navTree as item (item.id)}
+						<NavGroup {item} />
+					{/each}
+				</ul>
 			</nav>
 		</aside>
 
@@ -277,13 +245,13 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		min-height: 2.75rem;
-		padding: 0.35rem 0.85rem;
+		min-height: 2rem;
+		padding: 0.3rem 0.75rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		background: var(--bg-2);
 		color: var(--text-muted);
-		font-size: 0.86rem;
+		font-size: 0.82rem;
 		cursor: pointer;
 		text-decoration: none;
 	}
@@ -320,17 +288,17 @@
 		grid-area: sidebar;
 		display: flex;
 		flex-direction: column;
-		padding: 1rem 0;
+		padding: 0.75rem 0 0;
 		background: var(--bg-1);
 		border-right: 1px solid var(--border);
 		color: var(--text);
 	}
 
 	.shell__sidebar-label {
-		padding: 0 1rem 0.4rem;
-		font-size: 0.7rem;
+		padding: 0 0.75rem 0.5rem;
+		font-size: 0.62rem;
 		font-family: var(--font-mono);
-		letter-spacing: 0.1em;
+		letter-spacing: 0.12em;
 		text-transform: uppercase;
 		color: var(--text-faint);
 	}
@@ -339,82 +307,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0;
-	}
-
-	.cap-nav__link {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-		padding: 0.5rem 1rem;
-		border-left: 2px solid transparent;
-		color: var(--text-muted);
-		text-decoration: none;
-	}
-
-	.cap-nav__link:hover {
-		background: rgba(255, 255, 255, 0.03);
-		color: var(--text);
-	}
-
-	.cap-nav__link--active {
-		background: var(--accent-soft);
-		border-left-color: var(--accent);
-		color: var(--text);
-	}
-
-	.cap-nav__title-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		width: 100%;
-		gap: 0.75rem;
-	}
-
-	.cap-nav__title-wrap {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.cap-nav__icon {
-		width: 16px;
-		text-align: center;
-		font-size: 0.9rem;
-	}
-
-	.cap-nav__title {
-		font-size: 0.93rem;
-	}
-
-	.cap-nav__badge {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.12rem 0.38rem;
-		border-radius: 3px;
-		font-size: 0.68rem;
-		font-family: var(--font-mono);
-		letter-spacing: 0.04em;
-		border: 1px solid transparent;
-	}
-
-	.cap-nav__badge--public,
-	.cap-nav__badge--available {
-		background: var(--success-soft);
-		color: var(--success);
-		border-color: var(--success-border);
-	}
-
-	.cap-nav__badge--partial {
-		background: var(--warning-soft);
-		color: var(--warning);
-		border-color: var(--warning-border);
-	}
-
-	.cap-nav__badge--locked {
-		background: var(--danger-soft);
-		color: var(--danger);
-		border-color: var(--danger-border);
+		padding: 0;
+		margin: 0;
+		list-style: none;
 	}
 
 	.shell__session-card {

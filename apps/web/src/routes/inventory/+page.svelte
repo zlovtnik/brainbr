@@ -1,66 +1,76 @@
 <script lang="ts">
 	import { navigating } from '$app/state';
-	import SectionPanel from '$lib/components/SectionPanel.svelte';
+	import { goto } from '$app/navigation';
 	import Spinner from '$lib/components/Spinner.svelte';
-	import StatStrip from '$lib/components/StatStrip.svelte';
 	import WorkspaceHeader from '$lib/components/WorkspaceHeader.svelte';
-	import { getCapability } from '$lib/capabilities';
-	import Select from '$lib/components/Select.svelte';
 	import InventoryTable from '$lib/features/inventory/InventoryTable.svelte';
+	import { getCapability } from '$lib/capabilities';
 	import type { PageProps } from './$types';
 
-	type InventoryStatTone = 'accent' | 'success' | 'warning' | 'default';
-
 	let { data }: PageProps = $props();
-	const capability = getCapability('inventory');
+	const capability = $derived(getCapability('inventory'));
 
 	let isLoading = $derived(Boolean(navigating.to));
-	let statItems = $derived<
-		{ label: string; value: string; detail: string; tone: InventoryStatTone }[]
-	>([
-		{
-			label: 'Access',
-			value: 'Scoped',
-			detail: 'Inventory access is available for the current session.',
-			tone: 'success'
-		},
-		{
-			label: 'Catalog matches',
-			value: String(data.inventory?.totalCount ?? 0),
-			detail: `${data.inventory?.items.length ?? 0} records on this page.`,
-			tone: 'accent'
-		},
-		{
-			label: 'Current view',
-			value: `Page ${data.filters.page}`,
-			detail: `${data.filters.sortBy.replaceAll('_', ' ')} · ${data.filters.sortOrder} · ${data.filters.limit} per page.`,
-			tone: 'default'
-		}
-	]);
 
-	function buildPageHref(page: number): string {
-		const params = new URLSearchParams({
-			page: String(page),
-			limit: String(data.filters.limit),
+	// Local reactive state for the search bar
+	let query = $state(data.filters.query);
+
+	// Combobox open state
+	let filterOpen = $state(false);
+
+	const SORT_OPTIONS = [
+		{ value: 'updated_at:desc', label: 'Newest first' },
+		{ value: 'updated_at:asc', label: 'Oldest first' },
+		{ value: 'sku_id:asc', label: 'SKU A → Z' },
+		{ value: 'sku_id:desc', label: 'SKU Z → A' }
+	] as const;
+
+	let sortValue = $derived(`${data.filters.sortBy}:${data.filters.sortOrder}`);
+
+	function buildHref(overrides: Record<string, string | boolean | number> = {}): string {
+		const p = new URLSearchParams({
+			page: String(data.filters.page),
 			sortBy: data.filters.sortBy,
 			sortOrder: data.filters.sortOrder
 		});
-		if (data.filters.query) {
-			params.set('query', data.filters.query);
+		if (data.filters.query) p.set('query', data.filters.query);
+		if (data.filters.includeInactive) p.set('includeInactive', 'true');
+		for (const [k, v] of Object.entries(overrides)) {
+			if (v === false || v === '') p.delete(k);
+			else p.set(k, String(v));
 		}
-		if (data.filters.includeInactive) {
-			params.set('includeInactive', 'true');
-		}
-		return `/inventory?${params.toString()}`;
+		// Reset to page 1 on filter/sort change
+		if (Object.keys(overrides).some((k) => k !== 'page')) p.set('page', '1');
+		return `/inventory?${p.toString()}`;
 	}
+
+	function submitSearch() {
+		goto(buildHref({ query: query.trim(), page: 1 }));
+	}
+
+	function applySort(val: string) {
+		const [sortBy, sortOrder] = val.split(':');
+		goto(buildHref({ sortBy, sortOrder }));
+		filterOpen = false;
+	}
+
+	function toggleInactive() {
+		goto(buildHref({ includeInactive: !data.filters.includeInactive }));
+		filterOpen = false;
+	}
+
+	function buildPageHref(page: number): string {
+		return buildHref({ page });
+	}
+
+	const sortLabel = $derived(
+		SORT_OPTIONS.find((o) => o.value === sortValue)?.label ?? 'Sort'
+	);
 </script>
 
 <svelte:head>
 	<title>Inventory | BrainBR</title>
-	<meta
-		name="description"
-		content="Search and manage your inventory catalog with filters, sorting, and pagination."
-	/>
+	<meta name="description" content="Search and manage your inventory catalog." />
 	<link href="/inventory" rel="canonical" />
 </svelte:head>
 
@@ -68,316 +78,435 @@
 	<WorkspaceHeader
 		tag={['GET', '/api/v1/inventory/sku']}
 		title={capability.navLabel}
-		description="Filter, sort, and drill into any SKU. Changes land instantly."
+		description="Filter, sort, and drill into any SKU."
 		statusLabel="Fiscal catalog live"
 		statusTone="success"
 		primaryAction={{ href: '/inventory/new', label: 'Create SKU' }}
 	/>
 
-	<StatStrip items={statItems} />
-
-	<div class="inventory-stack">
-		<SectionPanel
-			title="Filters"
-			subtitle="Search first, then tune sorting and visibility."
-		>
-			{#snippet children()}
-				<form aria-describedby="inventory-filter-help" class="filters" method="GET" role="search">
-					<input type="hidden" name="limit" value={data.filters.limit} />
-					<div class="filters__row">
-						<label class="filters__search" for="query">
-							<span>Search</span>
-							<input
-								id="query"
-								name="query"
-								placeholder="SKU, description, or NCM code"
-								type="search"
-								value={data.filters.query}
-							/>
-						</label>
-
-						<div class="filters__secondary">
-							<Select
-								id="sortBy"
-								label="Sort field"
-								name="sortBy"
-								options={[
-									{ value: 'updated_at', label: 'Updated time' },
-									{ value: 'sku_id', label: 'SKU ID' }
-								]}
-								value={data.filters.sortBy}
-							/>
-
-							<Select
-								id="sortOrder"
-								label="Sort direction"
-								name="sortOrder"
-								options={[
-									{ value: 'desc', label: 'Newest first' },
-									{ value: 'asc', label: 'Oldest / A-Z first' }
-								]}
-								value={data.filters.sortOrder}
-							/>
-						</div>
-					</div>
-
-					<div class="filters__toolbar">
-						<label class="filters__toggle">
-							<input
-								checked={data.filters.includeInactive}
-								name="includeInactive"
-								type="checkbox"
-								value="true"
-							/>
-							<span>Include inactive SKUs</span>
-						</label>
-
-						<div class="filters__actions">
-							<button class="text-link text-link--primary" type="submit">Apply filters</button>
-						</div>
-					</div>
-
-					<p class="sr-only" id="inventory-filter-help">
-						Search by SKU, description, or NCM code, then apply filters to reload the current page.
-					</p>
-				</form>
-			{/snippet}
-		</SectionPanel>
-
-		<SectionPanel
-			title="Results"
-			subtitle="Review the current page while refreshed results are on the way."
-		>
-			{#snippet children()}
-				<div class:results-shell--loading={isLoading} class="results-shell">
-					{#if isLoading}
-						<div aria-live="polite" class="results-shell__overlay">
-							<Spinner label="Refreshing inventory results" />
-						</div>
-					{/if}
-
-					<InventoryTable inventory={data.inventory} />
-
-					{#if data.inventory}
-						<nav aria-label="Pagination" class="pager">
-							{#if data.filters.page > 1}
-								<a class="text-link" href={buildPageHref(data.filters.page - 1)}>Previous page</a>
-							{:else}
-								<button class="text-link text-link--disabled" disabled type="button">
-									Previous page
-								</button>
-							{/if}
-							<span class="pager__current">Page {data.filters.page}</span>
-							{#if data.inventory.hasMore}
-								<a class="text-link" href={buildPageHref(data.filters.page + 1)}>Next page</a>
-							{:else}
-								<button class="text-link text-link--disabled" disabled type="button">
-									Next page
-								</button>
-							{/if}
-						</nav>
+	<div class="inventory-body">
+		<!-- Search + filter bar -->
+		<div class="toolbar">
+			<form class="toolbar__search" onsubmit={(e) => { e.preventDefault(); submitSearch(); }}>
+				<div class="search-wrap">
+					<svg class="search-icon" aria-hidden="true" viewBox="0 0 16 16" fill="none">
+						<circle cx="6.5" cy="6.5" r="4" stroke="currentColor" stroke-width="1.4"/>
+						<path d="M10 10l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+					</svg>
+					<input
+						class="search-input"
+						type="search"
+						name="query"
+						placeholder="SKU, description, or NCM code…"
+						bind:value={query}
+						autocomplete="off"
+						aria-label="Search inventory"
+					/>
+					{#if query}
+						<button
+							class="search-clear"
+							type="button"
+							aria-label="Clear search"
+							onclick={() => { query = ''; submitSearch(); }}
+						>×</button>
 					{/if}
 				</div>
-			{/snippet}
-		</SectionPanel>
+				<button class="btn-search" type="submit">Search</button>
+			</form>
+
+			<!-- Filter combobox -->
+			<div class="filter-combo">
+				<button
+					class="filter-trigger"
+					class:filter-trigger--active={filterOpen}
+					type="button"
+					aria-haspopup="listbox"
+					aria-expanded={filterOpen}
+					onclick={() => (filterOpen = !filterOpen)}
+				>
+					<svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+						<path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+					</svg>
+					{sortLabel}{data.filters.includeInactive ? ' · +inactive' : ''}
+				</button>
+
+				{#if filterOpen}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
+						class="filter-dropdown"
+						role="listbox"
+						tabindex="-1"
+						aria-label="Filter and sort options"
+						onkeydown={(e) => e.key === 'Escape' && (filterOpen = false)}
+					>
+						<div class="filter-section">
+							<span class="filter-section__label">Sort</span>
+							{#each SORT_OPTIONS as opt}
+								<button
+									class="filter-option"
+									class:filter-option--selected={sortValue === opt.value}
+									role="option"
+									aria-selected={sortValue === opt.value}
+									type="button"
+									onclick={() => applySort(opt.value)}
+								>{opt.label}</button>
+							{/each}
+						</div>
+						<div class="filter-section filter-section--border">
+							<button
+								class="filter-option"
+								class:filter-option--selected={data.filters.includeInactive}
+								role="option"
+								aria-selected={data.filters.includeInactive}
+								type="button"
+								onclick={toggleInactive}
+							>Include inactive SKUs</button>
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			{#if data.filters.query || data.filters.includeInactive}
+				<a class="clear-link" href="/inventory">Clear</a>
+			{/if}
+		</div>
+
+		<!-- Results -->
+		<div class="results" class:results--loading={isLoading}>
+			{#if isLoading}
+				<div class="results__overlay" aria-live="polite">
+					<Spinner label="Refreshing" />
+				</div>
+			{/if}
+
+			<InventoryTable inventory={data.inventory} />
+
+			{#if data.inventory && (data.filters.page > 1 || data.inventory.hasMore)}
+				<nav aria-label="Pagination" class="pager">
+					{#if data.filters.page > 1}
+						<a class="pager__btn" href={buildPageHref(data.filters.page - 1)}>← Prev</a>
+					{:else}
+						<span class="pager__btn pager__btn--disabled">← Prev</span>
+					{/if}
+					<span class="pager__current">p. {data.filters.page}</span>
+					{#if data.inventory.hasMore}
+						<a class="pager__btn" href={buildPageHref(data.filters.page + 1)}>Next →</a>
+					{:else}
+						<span class="pager__btn pager__btn--disabled">Next →</span>
+					{/if}
+				</nav>
+			{/if}
+		</div>
 	</div>
 </section>
+
+<!-- Close dropdown on outside click -->
+{#if filterOpen}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="filter-backdrop"
+		onclick={() => (filterOpen = false)}
+		onkeydown={(e) => e.key === 'Escape' && (filterOpen = false)}
+	></div>
+{/if}
 
 <style>
 	.inventory-page {
 		display: grid;
 		min-width: 0;
-		background: var(--bg);
-		background-color: var(--bg) !important;
 	}
 
-	.inventory-stack {
+	.inventory-body {
 		display: grid;
+		gap: 0;
+		padding: 1.25rem 0 2rem;
 	}
 
-	.inventory-stack :global(.section-panel + .section-panel) {
-		border-top: 1px solid var(--border);
-	}
-
-	.filters {
-		display: grid;
-		gap: var(--space-4);
-	}
-
-	.filters__row {
-		display: grid;
-		grid-template-columns: minmax(280px, 2.2fr) minmax(0, 1.3fr);
-		gap: var(--space-4);
-		align-items: end;
-	}
-
-	.filters__search,
-	.filters__toggle {
-		display: grid;
-		gap: var(--space-2);
-	}
-
-	.filters__search span,
-	.filters__toggle span {
-		font-weight: 500;
-		color: var(--text);
-	}
-
-	.filters__search input {
-		min-height: 3.2rem;
-		padding: 0.95rem 1rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
-		background: var(--bg-3);
-		background-color: var(--bg-3) !important;
-		color: var(--text);
-		caret-color: var(--text);
-	}
-
-	.filters__search input::placeholder {
-		color: var(--text-faint);
-	}
-
-	.filters__secondary {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: var(--space-4);
-	}
-
-	.filters :global(.field) {
-		padding: 0.85rem 0.9rem;
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
-		background: var(--bg-3);
-		background-color: var(--bg-3) !important;
-	}
-
-	.filters__toggle {
-		grid-auto-flow: column;
-		grid-template-columns: auto 1fr;
-		align-items: center;
-		align-self: end;
-		min-height: 3.2rem;
-		padding: 0.9rem 1rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border);
-		background: var(--bg-3);
-		background-color: var(--bg-3) !important;
-	}
-
-	.filters__toggle input {
-		width: 1rem;
-		height: 1rem;
-		accent-color: var(--color-accent-strong);
-	}
-
-	.filters__toolbar {
+	/* ── Toolbar ── */
+	.toolbar {
 		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
 		align-items: center;
-		gap: var(--space-4);
-	}
-
-	.filters__actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-3);
-		margin-left: auto;
-	}
-
-	.text-link {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 2.75rem;
-		padding: 0.38rem 0.85rem;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--border);
-		font-weight: 500;
-		color: var(--text-muted);
-		text-decoration: none;
-		background: var(--bg-2);
-	}
-
-	.text-link:hover {
-		background: var(--bg-3);
-		border-color: var(--border-strong);
-		color: var(--text);
-	}
-
-	.text-link:focus,
-	.text-link:focus-visible {
-		background: var(--bg-3);
-		border-color: var(--border-strong);
-		color: var(--text);
-		outline: 2px solid var(--color-accent-strong);
-		outline-offset: 2px;
-	}
-
-	.text-link--primary {
-		cursor: pointer;
-	}
-
-	.text-link--disabled {
-		color: var(--text-faint);
-		cursor: not-allowed;
-		border-color: var(--border);
-		background: var(--bg-2);
-	}
-
-	.results-shell {
+		gap: 0.5rem;
+		padding: 0 0 1rem;
 		position: relative;
-		display: grid;
-		gap: 1rem;
 	}
 
-	.results-shell__overlay {
-		position: absolute;
-		inset: 0 0 auto 0;
-		z-index: 1;
+	.toolbar__search {
 		display: flex;
-		justify-content: center;
-		padding: 1rem;
-		background: linear-gradient(180deg, rgba(var(--bg-rgb, 13, 15, 18), 0.86), rgba(var(--bg-rgb, 13, 15, 18), 0));
+		align-items: center;
+		gap: 0.5rem;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.search-wrap {
+		position: relative;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.search-icon {
+		position: absolute;
+		left: 0.6rem;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 14px;
+		height: 14px;
+		color: var(--text-faint);
 		pointer-events: none;
 	}
 
-	.pager {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, auto));
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-4);
-		margin-top: 1rem;
-		color: var(--text-muted);
+	.search-input {
+		width: 100%;
+		min-height: 2rem;
+		padding: 0.35rem 2rem 0.35rem 2rem;
+		border: 1px solid var(--color-input-border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-2);
+		color: var(--text);
+		font-size: 0.86rem;
+		font-family: var(--font-sans);
+		caret-color: var(--accent);
 	}
 
-	.pager__current {
-		justify-self: center;
-		font-family: var(--font-mono);
-		font-size: 0.82rem;
+	.search-input::placeholder {
 		color: var(--text-faint);
 	}
 
-	@media (max-width: 860px) {
-		.filters__row,
-		.filters__secondary {
-			grid-template-columns: 1fr;
-		}
+	.search-input:focus {
+		outline: none;
+		border-color: var(--accent);
+		box-shadow: 0 0 0 2px var(--focus-ring);
 	}
 
-	@media (max-width: 720px) {
-		.filters__actions .text-link {
+	.search-clear {
+		position: absolute;
+		right: 0.5rem;
+		top: 50%;
+		transform: translateY(-50%);
+		background: none;
+		border: none;
+		color: var(--text-faint);
+		font-size: 1rem;
+		line-height: 1;
+		cursor: pointer;
+		padding: 0 0.2rem;
+	}
+
+	.search-clear:hover {
+		color: var(--text);
+	}
+
+	.btn-search {
+		min-height: 2rem;
+		padding: 0.3rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-2);
+		color: var(--text-muted);
+		font-size: 0.86rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.btn-search:hover {
+		background: var(--bg-3);
+		border-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	/* ── Filter combobox ── */
+	.filter-combo {
+		position: relative;
+	}
+
+	.filter-trigger {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		min-height: 2rem;
+		padding: 0.3rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-2);
+		color: var(--text-muted);
+		font-size: 0.86rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.filter-trigger svg {
+		width: 13px;
+		height: 13px;
+		flex-shrink: 0;
+	}
+
+	.filter-trigger:hover,
+	.filter-trigger--active {
+		background: var(--bg-3);
+		border-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	.filter-dropdown {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		z-index: 50;
+		min-width: 180px;
+		background: var(--bg-2);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-md);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+		overflow: hidden;
+	}
+
+	.filter-section {
+		display: flex;
+		flex-direction: column;
+		padding: 0.35rem 0;
+	}
+
+	.filter-section--border {
+		border-top: 1px solid var(--border);
+	}
+
+	.filter-section__label {
+		padding: 0.25rem 0.75rem 0.15rem;
+		font-size: 0.68rem;
+		font-family: var(--font-mono);
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--text-faint);
+	}
+
+	.filter-option {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.3rem 0.75rem;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 0.86rem;
+		text-align: left;
+		cursor: pointer;
+		width: 100%;
+	}
+
+	.filter-option:hover {
+		background: var(--bg-3);
+		color: var(--text);
+	}
+
+	.filter-option--selected {
+		color: var(--accent-vivid);
+	}
+
+	.filter-option--selected::before {
+		content: '✓';
+		font-size: 0.75rem;
+		width: 0.75rem;
+		flex-shrink: 0;
+	}
+
+	.filter-option:not(.filter-option--selected)::before {
+		content: '';
+		width: 0.75rem;
+		flex-shrink: 0;
+	}
+
+	.filter-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 49;
+	}
+
+	.clear-link {
+		min-height: 2rem;
+		padding: 0.3rem 0.6rem;
+		font-size: 0.82rem;
+		font-family: var(--font-mono);
+		color: var(--text-faint);
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.clear-link:hover {
+		color: var(--text-muted);
+	}
+
+	/* ── Results ── */
+	.results {
+		position: relative;
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.results--loading {
+		opacity: 0.6;
+		pointer-events: none;
+	}
+
+	.results__overlay {
+		position: absolute;
+		top: 0.5rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 1;
+	}
+
+	/* ── Pager ── */
+	.pager {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding-top: 0.5rem;
+		border-top: 1px solid var(--border);
+	}
+
+	.pager__btn {
+		display: inline-flex;
+		align-items: center;
+		min-height: 2rem;
+		padding: 0.3rem 0.65rem;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-2);
+		color: var(--text-muted);
+		font-size: 0.82rem;
+		font-family: var(--font-mono);
+		text-decoration: none;
+		cursor: pointer;
+	}
+
+	.pager__btn:hover {
+		background: var(--bg-3);
+		border-color: var(--border-strong);
+		color: var(--text);
+	}
+
+	.pager__btn--disabled {
+		color: var(--text-faint);
+		cursor: not-allowed;
+		border-color: var(--border);
+		background: transparent;
+	}
+
+	.pager__current {
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		color: var(--text-faint);
+	}
+
+	@media (max-width: 640px) {
+		.toolbar {
+			flex-wrap: wrap;
+		}
+
+		.toolbar__search {
 			width: 100%;
-		}
-
-		.pager {
-			grid-template-columns: 1fr;
-		}
-
-		.pager__current {
-			justify-self: start;
 		}
 	}
 </style>

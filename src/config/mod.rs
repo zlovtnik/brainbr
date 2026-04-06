@@ -103,9 +103,15 @@ impl AppConfig {
                 openai_base_url: optional("APP_PROVIDERS_OPENAI_BASE_URL", "https://api.openai.com/v1"),
                 openai_api_key: optional("APP_PROVIDERS_OPENAI_API_KEY", ""),
                 provider_mode: optional("MODEL_PROVIDER_MODE", "real"),
-                audit_min_confidence: optional("AUDIT_MIN_CONFIDENCE", "0.5")
-                    .parse()
-                    .context("AUDIT_MIN_CONFIDENCE must be a float between 0 and 1")?,
+                audit_min_confidence: {
+                    let v: f64 = optional("AUDIT_MIN_CONFIDENCE", "0.5")
+                        .parse()
+                        .context("AUDIT_MIN_CONFIDENCE must be a float between 0 and 1")?;
+                    if !(0.0..=1.0).contains(&v) {
+                        anyhow::bail!("AUDIT_MIN_CONFIDENCE must be a float between 0 and 1");
+                    }
+                    v
+                },
             },
             queue: QueueConfig {
                 stream_ingestion: optional("APP_QUEUE_STREAM_INGESTION", "queue_ingestion"),

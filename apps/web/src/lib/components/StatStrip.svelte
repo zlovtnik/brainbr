@@ -58,10 +58,10 @@
 
 	.stat-strip__value {
 		margin: 0;
-		font-size: clamp(2.2rem, 4vw, 3rem);
+		font-size: clamp(1.1rem, 2vw, 1.4rem);
 		font-weight: 600;
-		font-family: var(--font-display);
-		line-height: 1;
+		font-family: var(--font-mono);
+		line-height: 1.2;
 		color: var(--text);
 		word-break: break-word;
 		order: 1;

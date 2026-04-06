@@ -202,8 +202,9 @@ async fn run_worker<J, F, Fut>(
                                             .map(|d| d.subsec_nanos() as u64 % base_backoff_ms)
                                             .unwrap_or(0);
                                         let backoff = base_backoff_ms * (1u64 << (attempt - 1).min(6)) + jitter;
-                                        tracing::warn!(stream, id, attempt, backoff_ms = backoff, "Job failed, will redeliver: {e}");
-                                        tokio::time::sleep(Duration::from_millis(backoff)).await;
+                                        tracing::warn!(stream, id, attempt, backoff_ms = backoff, "Job failed, will redeliver after Redis visibility timeout: {e}");
+                                        // Message is not acked; Redis will redeliver it after the
+                                        // visibility timeout. Backoff logged for observability only.
                                     }
                                 }
                             }

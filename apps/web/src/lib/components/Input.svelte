@@ -62,13 +62,16 @@
 	}
 
 	.field__label {
-		font-weight: 500;
-		color: var(--text);
+		font-size: 0.8rem;
+		font-weight: 400;
+		font-family: var(--font-mono);
+		letter-spacing: 0.04em;
+		color: var(--text-muted);
 	}
 
 	.field__hint,
 	.field__error {
-		font-size: 0.92rem;
+		font-size: 0.78rem;
 	}
 
 	.field__hint {
@@ -81,13 +84,14 @@
 
 	.field__input {
 		width: 100%;
-		min-height: 3rem;
-		padding: 0.85rem 1rem;
+		min-height: 2rem;
+		padding: 0.35rem 0.65rem;
 		border: 1px solid var(--border);
 		border-radius: var(--radius-sm);
 		background: var(--bg-2);
 		background-color: var(--bg-2) !important;
 		background-image: none !important;
+		font-size: 0.86rem;
 		color: var(--text);
 	}
 

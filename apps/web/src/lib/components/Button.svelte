@@ -56,11 +56,11 @@
 		align-items: center;
 		justify-content: center;
 		gap: var(--space-2);
-		min-height: 2.75rem;
-		padding: 0.38rem 0.85rem;
+		min-height: 2rem;
+		padding: 0.3rem 0.75rem;
 		border-radius: var(--radius-sm);
 		border: 1px solid var(--border);
-		font-weight: 500;
+		font-weight: 400;
 		font-size: 0.86rem;
 		text-decoration: none;
 		cursor: pointer;
