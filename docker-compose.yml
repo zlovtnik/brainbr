@@ -1,0 +1,59 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: fiscalbrain_db
+    environment:
+      POSTGRES_DB: fiscalbrain
+      POSTGRES_USER: ${DB_USER:-fiscal_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-fiscal_user} -d fiscalbrain"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: fiscalbrain_redis
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fiscalbrain_rust_api
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-fiscal_user}:${DB_PASSWORD}@db:5432/fiscalbrain
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8080:8080"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fiscalbrain_rust_worker
+    entrypoint: ["/app/worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-fiscal_user}:${DB_PASSWORD}@db:5432/fiscalbrain
+      REDIS_URL: redis://redis:6379/0
+
+volumes:
+  pgdata:

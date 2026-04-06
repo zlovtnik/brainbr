@@ -111,6 +111,17 @@
 		text-decoration: none;
 	}
 
+	.back-link:hover {
+		color: var(--text);
+		text-decoration: underline;
+	}
+
+	.back-link:focus-visible {
+		color: var(--text);
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
 	.detail-header {
 		justify-content: space-between;
 	}

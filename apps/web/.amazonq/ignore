@@ -1,0 +1,5 @@
+# Generated build output — not source code
+.svelte-kit/
+build/
+.output/
+node_modules/

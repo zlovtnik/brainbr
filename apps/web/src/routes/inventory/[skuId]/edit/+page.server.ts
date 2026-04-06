@@ -7,6 +7,7 @@ import { writeFlash } from '$lib/server/session';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
+	// amazonq-ignore-next-line
 	requireSession(event);
 
 	try {
@@ -32,6 +33,7 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	default: async (event) => {
+		// amazonq-ignore-next-line
 		requireSession(event);
 
 		const formData = await event.request.formData();

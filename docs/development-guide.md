@@ -23,7 +23,7 @@ This guide turns the technical specification into an implementation-ready plan w
   - Environment boots locally and migrations apply.
   - Inventory CRUD paths enforce tenant isolation and soft delete semantics.
   - DB session tenant context is set per request (`app.current_company_id`) with RLS active.
-  - Baseline observability exposes actuator health/info and request correlation headers.
+  - Baseline observability exposes health endpoints (`/actuator/health`, liveness, readiness) and request correlation headers.
 - Dependencies:
   - Docker runtime, PostgreSQL + Redis, Flyway baseline, environment secrets, JWT issuer/JWKS configuration.
 

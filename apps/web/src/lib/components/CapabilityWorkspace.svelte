@@ -190,7 +190,7 @@
 							<div class="workflow-item__header">
 								<h3>{workflow.title}</h3>
 								<span class={`workflow-state workflow-state--${workflow.status}`}>
-									<div class="workflow-state__dot"></div>
+									<span aria-hidden="true" class="workflow-state__dot"></span>
 									{workflowStateText(workflow.status)}
 								</span>
 							</div>

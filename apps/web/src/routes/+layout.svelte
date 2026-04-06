@@ -38,7 +38,7 @@
 				? data.session.user
 				: 'Guest'
 	);
-	let homeHref = $derived(authenticated ? '/inventory' : '/auth');
+	let homeHref = $derived(authenticated ? '/platform' : '/auth');
 	const capabilityIcons = {
 		platform: '◈',
 		inventory: '◫',
@@ -59,7 +59,7 @@
 <div class="page-shell shell">
 	<header class="shell__topbar">
 		<div class="shell__topbar-left">
-			<a aria-label={authenticated ? 'BrainBR, go to inventory' : 'BrainBR, go to sign in'} class="shell__brand" href={homeHref}>
+			<a aria-label={authenticated ? 'BrainBR, go to platform' : 'BrainBR, go to sign in'} class="shell__brand" href={homeHref}>
 				<div class="shell__brand-dot"></div>
 				<span>BrainBR</span>
 			</a>

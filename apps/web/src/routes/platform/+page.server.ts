@@ -7,9 +7,18 @@ interface PlatformInfoResponse {
 	llmModel: string;
 }
 
+const ALLOWED_API_PROTOCOLS = new Set(['http:', 'https:']);
+
 function getApiBaseUrl(): string | null {
 	const baseUrl = env.API_BASE_URL?.trim() || process.env.API_BASE_URL?.trim();
-	return baseUrl ? baseUrl.replace(/\/$/, '') : null;
+	if (!baseUrl) return null;
+	try {
+		const parsed = new URL(baseUrl);
+		if (!ALLOWED_API_PROTOCOLS.has(parsed.protocol)) return null;
+		return parsed.origin;
+	} catch {
+		return null;
+	}
 }
 
 export const load: PageServerLoad = async ({ fetch }) => {
@@ -22,11 +31,19 @@ export const load: PageServerLoad = async ({ fetch }) => {
 	}
 
 	try {
-		const response = await fetch(`${apiBaseUrl}/api/v1/platform/info`, {
-			headers: {
-				accept: 'application/json'
-			}
-		});
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 3000);
+		let response: Response;
+		try {
+			response = await fetch(`${apiBaseUrl}/api/v1/platform/info`, {
+				headers: {
+					accept: 'application/json'
+				},
+				signal: controller.signal
+			});
+		} finally {
+			clearTimeout(timeoutId);
+		}
 
 		if (!response.ok) {
 			return {
@@ -41,15 +58,17 @@ export const load: PageServerLoad = async ({ fetch }) => {
 				platformError: null
 			};
 		} catch (error) {
+			console.error('Platform info JSON parse failure:', error);
 			return {
 				platformInfo: null,
-				platformError: `Platform info response could not be parsed as JSON: ${error instanceof Error ? error.message : 'Unknown parse failure'}.`
+				platformError: 'Unable to load platform information.'
 			};
 		}
 	} catch (error) {
+		console.error('Platform info fetch failure:', error);
 		return {
 			platformInfo: null,
-			platformError: `Unexpected error while fetching platform info: ${error instanceof Error ? error.message : 'Unknown error'}.`
+			platformError: 'Unexpected error loading platform information.'
 		};
 	}
 };

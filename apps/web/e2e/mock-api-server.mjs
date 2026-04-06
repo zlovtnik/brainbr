@@ -106,9 +106,14 @@ async function readBody(request) {
 	}
 }
 
+const ALLOWED_ORIGIN = `http://127.0.0.1:${PORT}`;
+
 const server = createServer(async (request, response) => {
 	try {
-		const url = new URL(request.url || '/', `http://127.0.0.1:${PORT}`);
+		const url = new URL(request.url || '/', ALLOWED_ORIGIN);
+		if (url.origin !== ALLOWED_ORIGIN) {
+			return sendJson(response, 400, { error_code: 'BAD_REQUEST', message: 'Invalid request URL', request_id: 'mock-req' });
+		}
 
 		if (request.method === 'POST' && url.pathname === '/__reset') {
 			inventory = seedInventory();

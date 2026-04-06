@@ -17,8 +17,8 @@
 	let errorId = $derived(error ? `${id}-error` : undefined);
 </script>
 
-<label class="field">
-	<span class="field__label">{label}</span>
+<div class="field">
+	<label class="field__label" for={id}>{label}</label>
 	<select
 		bind:value
 		class="field__select"
@@ -38,7 +38,7 @@
 	{#if error}
 		<span class="field__error" id={errorId}>{error}</span>
 	{/if}
-</label>
+</div>
 
 <style>
 	.field {

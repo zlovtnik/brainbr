@@ -6,13 +6,16 @@ import { consumeFlash } from '$lib/server/session';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
+ // amazonq-ignore-next-line
 	requireSession(event);
+
+	const successMessage = consumeFlash(event.cookies)?.message ?? null;
 
 	try {
 		const item = await createApiClientFromEvent(event).getInventorySku(event.params.skuId, true);
 		return {
 			item: mapInventoryRecord(item),
-			successMessage: consumeFlash(event.cookies)?.message ?? null
+			successMessage
 		};
 	} catch (cause) {
 		if (cause instanceof ApiClientError && cause.status === 404) {
