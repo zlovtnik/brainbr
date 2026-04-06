@@ -12,6 +12,8 @@
 	const hasActiveChild = (node: NavItem): boolean =>
 		node.children?.some((c) => (c.path ? isLeafActive(c.path) : hasActiveChild(c))) ?? false;
 
+	const activeChild = $derived(hasActiveChild(item));
+
 	let open = $state(false);
 	let seededOpen = $state(false);
 
@@ -20,7 +22,7 @@
 			open = item.defaultOpen ?? false;
 			seededOpen = true;
 		}
-		if (hasActiveChild(item)) open = true;
+		if (activeChild) open = true;
 	});
 
 	const badgeStatus = $derived(item.children ? worstStatus(item.children) : (item.status ?? 'live'));
@@ -40,13 +42,13 @@
 <li
 	role="treeitem"
 	aria-expanded={open}
-	aria-selected={hasActiveChild(item)}
+	aria-selected={activeChild}
 	class="nav-group"
 	class:nav-group--collapsed={!open}
 >
 	<button
 		class="nav-group__trigger"
-		class:nav-group__trigger--parent-active={hasActiveChild(item)}
+		class:nav-group__trigger--parent-active={activeChild}
 		onclick={() => (open = !open)}
 		onkeydown={onKeydown}
 		aria-controls={open ? `nav-children-${item.id}` : undefined}
@@ -70,21 +72,26 @@
 			class="nav-group__children"
 		>
 			{#each item.children ?? [] as child (child.id)}
-				{#if child.children}
+				{#if Array.isArray(child.children) && child.children.length > 0}
 					<NavGroup item={child} />
 				{:else}
+					{@const leafActive = child.path ? isLeafActive(child.path) : false}
 					<li
 						role="treeitem"
-						aria-selected={child.path ? isLeafActive(child.path) : false}
-						aria-current={child.path && isLeafActive(child.path) ? 'page' : undefined}
+						aria-selected={leafActive}
+						aria-current={leafActive ? 'page' : undefined}
 					>
-						<a
-							href={child.path}
-							class="nav-group__child-link"
-							class:nav-group__child-link--active={child.path && isLeafActive(child.path)}
-						>
-							{child.label}
-						</a>
+						{#if child.path}
+							<a
+								href={child.path}
+								class="nav-group__child-link"
+								class:nav-group__child-link--active={leafActive}
+							>
+								{child.label}
+							</a>
+						{:else}
+							<span class="nav-group__child-link">{child.label}</span>
+						{/if}
 					</li>
 				{/if}
 			{/each}

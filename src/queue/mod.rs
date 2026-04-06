@@ -229,4 +229,41 @@ impl RedisQueueClient {
     fn retry_delay_key(stream: &str, id: &str) -> String {
         format!("queue:retry-delay:{stream}:{id}")
     }
+
+    fn retry_count_key(stream: &str, id: &str) -> String {
+        format!("queue:retry-count:{stream}:{id}")
+    }
+
+    pub async fn get_retry_count(&mut self, stream: &str, id: &str) -> anyhow::Result<u32> {
+        let key = Self::retry_count_key(stream, id);
+        let val: Option<u32> = redis::cmd("GET")
+            .arg(&key)
+            .query_async(&mut self.conn)
+            .await?;
+        Ok(val.unwrap_or(0))
+    }
+
+    pub async fn incr_retry_count(&mut self, stream: &str, id: &str, ttl_ms: u64) -> anyhow::Result<u32> {
+        let key = Self::retry_count_key(stream, id);
+        let count: u32 = redis::cmd("INCR")
+            .arg(&key)
+            .query_async(&mut self.conn)
+            .await?;
+        // Refresh TTL on each increment so the key expires after the last retry window
+        redis::cmd("PEXPIRE")
+            .arg(&key)
+            .arg(ttl_ms.max(1))
+            .query_async::<()>(&mut self.conn)
+            .await?;
+        Ok(count)
+    }
+
+    pub async fn clear_retry_count(&mut self, stream: &str, id: &str) -> anyhow::Result<()> {
+        let key = Self::retry_count_key(stream, id);
+        redis::cmd("DEL")
+            .arg(&key)
+            .query_async::<()>(&mut self.conn)
+            .await?;
+        Ok(())
+    }
 }

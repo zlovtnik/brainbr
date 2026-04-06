@@ -32,17 +32,23 @@ export async function resetMockApi(request) {
 
 const ALLOWED_SCOPES = new Set([
 	'inventory:read', 'inventory:write',
-	'audit:read', 'audit:write',
-	'report:read', 'report:write'
+	'audit:read', 'audit:write', 'audit:trigger', 'audit:query',
+	'report:read', 'report:write',
+	'compliance:read',
+	'split_payment:read', 'split_payment:write',
+	'ingestion:write'
 ]);
 
 const SUB_RE = /^[\w-]{1,64}$/;
 const TENANT_RE = /^[\w-]{1,64}$/;
 
 function validateSessionPayload(payload) {
+	if (typeof payload.sub !== 'string' || !payload.sub) throw new Error(`bootstrapSession: invalid sub "${payload.sub}"`);
 	if (!SUB_RE.test(payload.sub)) throw new Error(`bootstrapSession: invalid sub "${payload.sub}"`);
+	if (typeof payload.tenant_id !== 'string' || !payload.tenant_id) throw new Error(`bootstrapSession: invalid tenant_id "${payload.tenant_id}"`);
 	if (!TENANT_RE.test(payload.tenant_id)) throw new Error(`bootstrapSession: invalid tenant_id "${payload.tenant_id}"`);
-	const scopes = payload.scope.split(' ');
+	if (typeof payload.scope !== 'string') throw new Error('bootstrapSession: scope must be a string');
+	const scopes = payload.scope.trim().split(/\s+/).filter(Boolean);
 	for (const s of scopes) {
 		if (!ALLOWED_SCOPES.has(s)) throw new Error(`bootstrapSession: disallowed scope "${s}"`);
 	}

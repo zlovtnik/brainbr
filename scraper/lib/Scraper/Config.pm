@@ -26,6 +26,8 @@ sub from_env {
 
   my @sources = map { _normalise_source($_) } @$sources;
 
+  my %sources_by_id = map { $_->{id} => $_ } @sources;
+
   my $timeout_s   = $ENV{SCRAPER_REQUEST_TIMEOUT_S};
   my $max_retries  = $ENV{SCRAPER_MAX_RETRIES};
   $timeout_s  = (defined $timeout_s  && $timeout_s  =~ /\A\d+\z/ && $timeout_s  > 0) ? int($timeout_s)  : 30;
@@ -46,6 +48,7 @@ sub from_env {
     schedule_lock_ttl_s  => ($timeout_s * $max_retries) + 60,
     dedup_ttl_seconds    => 90 * 24 * 60 * 60,
     sources              => \@sources,
+    sources_by_id        => \%sources_by_id,
   }, $class;
 }
 
@@ -70,11 +73,7 @@ sub sources {
 
 sub source_by_id {
   my ($self, $id) = @_;
-  for my $source (@{$self->{sources}}) {
-    return $source if $source->{id} eq $id;
-  }
-
-  return;
+  return $self->{sources_by_id}{$id};
 }
 
 sub _normalise_source {
@@ -93,8 +92,18 @@ sub _normalise_source {
     id                => "$source->{id}",
     parser_class      => "$source->{parser_class}",
     cadence_seconds   => int($source->{cadence_seconds}),
-    request_limit     => int($source->{request_limit} // 10),
-    initial_delay_seconds => int($source->{initial_delay_seconds} // 0),
+    request_limit     => do {
+      my $v = $source->{request_limit};
+      (!defined $v) ? 10
+        : ($v =~ /\A\d+\z/) ? int($v)
+        : croak "Source '$source->{id}' request_limit must be a non-negative integer";
+    },
+    initial_delay_seconds => do {
+      my $v = $source->{initial_delay_seconds};
+      (!defined $v) ? 0
+        : ($v =~ /\A\d+\z/) ? int($v)
+        : croak "Source '$source->{id}' initial_delay_seconds must be a non-negative integer";
+    },
     tags              => _coerce_to_array($source->{tags}),
     query             => $source->{query} && ref $source->{query} eq 'HASH'
       ? { %{$source->{query}} }
@@ -118,6 +127,7 @@ sub _coerce_to_array {
 
 sub _env_truthy {
   my ($value) = @_;
+  return 0 unless defined $value;
   return $value =~ /\A(?:1|true|yes|on)\z/i ? 1 : 0;
 }
 

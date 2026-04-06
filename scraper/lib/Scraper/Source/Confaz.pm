@@ -24,12 +24,13 @@ sub fetch_documents {
   for my $entry (@links) {
     my $document = eval { $self->fetch_text_document($entry->{source_url}, $request_id) };
     if (!$document) {
+      my $err = $@ || 'fetch_text_document returned falsy without exception';
       $self->_log(
         error => 'Failed to fetch CONFAZ document',
         {
           request_id => $request_id,
           source_url => $entry->{source_url},
-          error      => "$@",
+          error      => $err,
         },
       );
       next;

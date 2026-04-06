@@ -6,12 +6,12 @@
 		value?: string;
 		type?: string;
 		error?: string;
-			hint?: string;
-			required?: boolean;
-			placeholder?: string;
-			readonly?: boolean;
-			step?: string;
-		}
+		hint?: string;
+		required?: boolean;
+		placeholder?: string;
+		readonly?: boolean;
+		step?: string;
+	}
 
 	let {
 		id,
@@ -21,11 +21,11 @@
 		type = 'text',
 		error,
 		hint,
-			required = false,
-			placeholder,
-			readonly = false,
-			step
-		}: Props = $props();
+		required = false,
+		placeholder,
+		readonly = false,
+		step
+	}: Props = $props();
 
 	let errorId = $derived(error ? `${id}-error` : undefined);
 	let describedBy = $derived(

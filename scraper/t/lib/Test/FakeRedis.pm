@@ -7,12 +7,13 @@ use v5.30;
 sub new {
   my ($class) = @_;
   return bless {
-    hashes  => {},
-    sets    => {},
-    strings => {},
-    expiry  => {},
-    streams => {},
-    txn     => undef,
+    hashes   => {},
+    sets     => {},
+    strings  => {},
+    expiry   => {},
+    streams  => {},
+    last_ids => {},
+    txn      => undef,
   }, $class;
 }
 
@@ -53,7 +54,14 @@ sub expire {
 
 sub ttl {
   my ($self, $key) = @_;
-  return $self->{expiry}{$key};
+  my $exists = exists $self->{hashes}{$key}
+            || exists $self->{sets}{$key}
+            || exists $self->{strings}{$key}
+            || exists $self->{streams}{$key};
+  return -2 unless $exists;
+  return -1 unless exists $self->{expiry}{$key};
+  my $remaining = $self->{expiry}{$key} - time();
+  return $remaining < 0 ? 0 : int($remaining);
 }
 
 sub set {
@@ -112,6 +120,9 @@ sub xadd {
 
 sub multi {
   my ($self) = @_;
+  if ($self->{_fail_txn}) {
+    return undef;
+  }
   $self->{txn} = 1;
   return 'OK';
 }
@@ -119,7 +130,15 @@ sub multi {
 sub exec {
   my ($self) = @_;
   $self->{txn} = undef;
+  if ($self->{_fail_txn}) {
+    die "EXECABORT Transaction discarded\n";
+  }
   return [];
+}
+
+sub set_fail_txn {
+  my ($self, $fail) = @_;
+  $self->{_fail_txn} = $fail ? 1 : 0;
 }
 
 sub discard {

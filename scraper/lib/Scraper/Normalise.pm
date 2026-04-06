@@ -2,6 +2,7 @@ package Scraper::Normalise;
 
 use strict;
 use warnings;
+use utf8;
 use v5.30;
 
 use Encode qw(decode FB_CROAK);
@@ -38,11 +39,13 @@ sub normalise_law_ref {
   return q{} unless defined $value;
 
   $value = clean_text($value);
-  $value =~ s/\b[nN]\s*[º°]\b/N/g;
+  $value =~ s/\b[nN]\s*[º°](?=\s|$)/N/g;
   $value = uc unidecode($value);
   $value =~ s/[^A-Z0-9\/(). -]+/ /g;
   $value =~ s/\s+/ /g;
   $value =~ s/\A\s+|\s+\z//g;
+
+  $value = substr($value, 0, 255) if length($value) > 255;
 
   return $value;
 }
@@ -83,7 +86,7 @@ sub extract_first_date {
     return parse_flexible_date($1);
   }
 
-  if ($value =~ /(\d{1,2}\s+de\s+[[:alpha:]]+\s+de\s+\d{4})/i) {
+  if ($value =~ /(\d{1,2}(?:[ºo])?\s+de\s+[[:alpha:]]+\s+de\s+\d{4})/i) {
     return parse_flexible_date($1);
   }
 
@@ -109,7 +112,7 @@ sub parse_flexible_date {
   }
 
   my $ascii = lc unidecode($value);
-  if ($ascii =~ /\A(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})\z/) {
+  if ($ascii =~ /\A(\d{1,2})(?:[ºo])?\s+de\s+([a-z]+)\s+de\s+(\d{4})\z/) {
     my ($day, $month_name, $year) = (int $1, $2, int $3);
     my $month = $MONTH_NUMBER{$month_name} or return undef;
     return undef unless _valid_date($year, $month, $day);

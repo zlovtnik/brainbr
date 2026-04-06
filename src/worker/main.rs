@@ -8,8 +8,8 @@ use fiscalbrain_br::{
     },
 };
 use serde::de::DeserializeOwned;
-use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
-use tokio::sync::{broadcast, Mutex};
+use std::{future::Future, sync::Arc, time::Duration};
+use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
@@ -45,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
         queue.audit_dlq.clone(),
         consumer.clone(),
         cfg.worker.audit_poll_interval_ms,
+        cfg.worker.reclaim_idle_threshold_ms,
         shutdown_tx.subscribe(),
         cfg.queue.retry_max_attempts,
         cfg.queue.retry_base_backoff_ms,
@@ -64,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
         queue.ingestion_dlq.clone(),
         consumer.clone(),
         cfg.worker.ingestion_poll_interval_ms,
+        cfg.worker.reclaim_idle_threshold_ms,
         shutdown_tx.subscribe(),
         cfg.queue.retry_max_attempts,
         cfg.queue.retry_base_backoff_ms,
@@ -139,6 +141,7 @@ async fn run_worker<J, F, Fut>(
     dlq: String,
     consumer: String,
     poll_ms: u64,
+    reclaim_idle_threshold_ms: u64,
     mut shutdown: broadcast::Receiver<()>,
     max_retries: u32,
     base_backoff_ms: u64,
@@ -149,11 +152,9 @@ async fn run_worker<J, F, Fut>(
     Fut: Future<Output = anyhow::Result<()>>,
 {
     const CLAIM_BATCH_SIZE: usize = 10;
-    // Per-message retry counters: message_id -> attempt count
-    let retry_counts: Arc<Mutex<HashMap<String, u32>>> = Arc::new(Mutex::new(HashMap::new()));
 
     loop {
-        match queue.reclaim_pending(&stream, &group, &consumer, poll_ms.max(1), CLAIM_BATCH_SIZE).await {
+        match queue.reclaim_pending(&stream, &group, &consumer, reclaim_idle_threshold_ms.max(1), CLAIM_BATCH_SIZE).await {
             Ok(reclaimed) if !reclaimed.is_empty() => {
                 if shutdown.try_recv().is_ok() {
                     tracing::info!(stream, "Worker shutting down");
@@ -165,7 +166,6 @@ async fn run_worker<J, F, Fut>(
                     &stream,
                     &group,
                     &dlq,
-                    &retry_counts,
                     max_retries,
                     base_backoff_ms,
                     &process,
@@ -191,7 +191,6 @@ async fn run_worker<J, F, Fut>(
                     &stream,
                     &group,
                     &dlq,
-                    &retry_counts,
                     max_retries,
                     base_backoff_ms,
                     &process,
@@ -207,7 +206,6 @@ async fn process_messages<J, F, Fut>(
     stream: &str,
     group: &str,
     dlq: &str,
-    retry_counts: &Arc<Mutex<HashMap<String, u32>>>,
     max_retries: u32,
     base_backoff_ms: u64,
     process: &F,
@@ -229,7 +227,9 @@ async fn process_messages<J, F, Fut>(
         match serde_json::from_str::<J>(&payload) {
             Ok(job) => match process(job).await {
                 Ok(()) => {
-                    retry_counts.lock().await.remove(&id);
+                    if let Err(e) = queue.clear_retry_count(stream, &id).await {
+                        tracing::warn!(stream, id, "Failed to clear retry count: {e}");
+                    }
                     if let Err(e) = queue.clear_retry_delay(stream, &id).await {
                         tracing::warn!(stream, id, "Failed to clear retry delay: {e}");
                     }
@@ -240,7 +240,9 @@ async fn process_messages<J, F, Fut>(
                 Err(e) => {
                     if e.downcast_ref::<NonRetryable>().is_some() {
                         tracing::error!(stream, id, "Non-retryable error, routing to DLQ immediately: {e}");
-                        retry_counts.lock().await.remove(&id);
+                        if let Err(ce) = queue.clear_retry_count(stream, &id).await {
+                            tracing::warn!(stream, id, "Failed to clear retry count: {ce}");
+                        }
                         if let Err(delay_err) = queue.clear_retry_delay(stream, &id).await {
                             tracing::warn!(stream, id, "Failed to clear retry delay: {delay_err}");
                         }
@@ -251,15 +253,17 @@ async fn process_messages<J, F, Fut>(
                         continue;
                     }
 
-                    let attempt = {
-                        let mut counts = retry_counts.lock().await;
-                        let n = counts.entry(id.clone()).or_insert(0);
-                        *n += 1;
-                        *n
+                    // TTL = max_retries * max backoff window (capped at 6 doublings) + buffer
+                    let count_ttl_ms = (max_retries as u64) * base_backoff_ms.max(1) * (1u64 << 6u64.min(max_retries as u64)) * 2;
+                    let attempt = match queue.incr_retry_count(stream, &id, count_ttl_ms).await {
+                        Ok(n) => n,
+                        Err(e) => { tracing::warn!(stream, id, "Failed to increment retry count: {e}"); 1 }
                     };
                     if attempt >= max_retries {
                         tracing::error!(stream, id, attempt, "Max retries reached, routing to DLQ: {e}");
-                        retry_counts.lock().await.remove(&id);
+                        if let Err(ce) = queue.clear_retry_count(stream, &id).await {
+                            tracing::warn!(stream, id, "Failed to clear retry count: {ce}");
+                        }
                         if let Err(delay_err) = queue.clear_retry_delay(stream, &id).await {
                             tracing::warn!(stream, id, "Failed to clear retry delay: {delay_err}");
                         }

@@ -78,6 +78,9 @@ pub struct WorkerConfig {
     /// Re-ingest shared KB rows not updated within this many milliseconds.
     /// Default: 604_800_000 (7 days).
     pub reingest_staleness_ms: u64,
+    /// Minimum idle time (ms) before a pending message is reclaimed by another worker.
+    /// Default: 30_000 (30 s). Should be larger than the maximum expected processing time.
+    pub reclaim_idle_threshold_ms: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +134,7 @@ impl AppConfig {
                 transition_refresh_interval_ms: optional("WORKER_TRANSITION_REFRESH_INTERVAL_MS", "3600000").parse().context("WORKER_TRANSITION_REFRESH_INTERVAL_MS must be a number")?,
                 reingest_interval_ms: optional("WORKER_REINGEST_INTERVAL_MS", "86400000").parse().context("WORKER_REINGEST_INTERVAL_MS must be a number")?,
                 reingest_staleness_ms: optional("WORKER_REINGEST_STALENESS_MS", "604800000").parse().context("WORKER_REINGEST_STALENESS_MS must be a number")?,
+                reclaim_idle_threshold_ms: optional("WORKER_RECLAIM_IDLE_THRESHOLD_MS", "30000").parse().context("WORKER_RECLAIM_IDLE_THRESHOLD_MS must be a number")?,
             },
             security: SecurityConfig {
                 jwt_issuer_uri: env::var("APP_SECURITY_JWT_ISSUER_URI").ok().filter(|s| !s.is_empty()),

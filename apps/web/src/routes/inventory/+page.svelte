@@ -43,8 +43,8 @@
 			if (v === false || v === '') p.delete(k);
 			else p.set(k, String(v));
 		}
-		// Reset to page 1 on filter/sort change
-		if (Object.keys(overrides).some((k) => k !== 'page')) p.set('page', '1');
+		// Reset to page 1 on filter/sort change, but only when page is not explicitly overridden
+		if (!('page' in overrides) && Object.keys(overrides).some((k) => k !== 'page')) p.set('page', '1');
 		return `/inventory?${p.toString()}`;
 	}
 
@@ -138,10 +138,22 @@
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
 						class="filter-dropdown"
-						role="listbox"
+						role="menu"
 						tabindex="-1"
 						aria-label="Filter and sort options"
-						onkeydown={(e) => e.key === 'Escape' && (filterOpen = false)}
+						onkeydown={(e) => {
+							if (e.key === 'Escape') { filterOpen = false; return; }
+							if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End') {
+								e.preventDefault();
+								const items = Array.from((e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="menuitem"]'));
+								if (!items.length) return;
+								const idx = items.indexOf(document.activeElement as HTMLElement);
+								if (e.key === 'Home') { items[0].focus(); return; }
+								if (e.key === 'End') { items[items.length - 1].focus(); return; }
+								const next = e.key === 'ArrowDown' ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length;
+								items[next].focus();
+							}
+						}}
 					>
 						<div class="filter-section">
 							<span class="filter-section__label">Sort</span>
@@ -149,8 +161,8 @@
 								<button
 									class="filter-option"
 									class:filter-option--selected={sortValue === opt.value}
-									role="option"
-									aria-selected={sortValue === opt.value}
+									role="menuitem"
+									aria-checked={sortValue === opt.value}
 									type="button"
 									onclick={() => applySort(opt.value)}
 								>{opt.label}</button>
@@ -160,8 +172,8 @@
 							<button
 								class="filter-option"
 								class:filter-option--selected={data.filters.includeInactive}
-								role="option"
-								aria-selected={data.filters.includeInactive}
+								role="menuitem"
+								aria-checked={data.filters.includeInactive}
 								type="button"
 								onclick={toggleInactive}
 							>Include inactive SKUs</button>
@@ -177,8 +189,11 @@
 
 		<!-- Results -->
 		<div class="results" class:results--loading={isLoading}>
+			<div class="sr-only" aria-live="polite" role="status">
+				{isLoading ? 'Refreshing…' : 'Refresh complete'}
+			</div>
 			{#if isLoading}
-				<div class="results__overlay" aria-live="polite">
+				<div class="results__overlay">
 					<Spinner label="Refreshing" />
 				</div>
 			{/if}
@@ -209,12 +224,25 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="filter-backdrop"
+		role="presentation"
 		onclick={() => (filterOpen = false)}
 		onkeydown={(e) => e.key === 'Escape' && (filterOpen = false)}
 	></div>
 {/if}
 
 <style>
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
 	.inventory-page {
 		display: grid;
 		min-width: 0;

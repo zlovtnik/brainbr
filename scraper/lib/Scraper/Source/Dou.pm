@@ -93,7 +93,8 @@ sub _published_at {
 
   for my $key (qw(published_at publicationDate dataPublicacao pubDate date createdAt)) {
     next unless defined $item->{$key} && length $item->{$key};
-    return extract_first_date($item->{$key}) // $item->{$key};
+    my $date = extract_first_date($item->{$key});
+    return $date if defined $date;
   }
 
   return extract_first_date($raw_content);
