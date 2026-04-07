@@ -412,14 +412,14 @@ impl IngestionService {
             law_type: law_type.clone(),
             source_url: source_url.clone(),
             raw_content: raw_content.clone(),
-            published_at: published_at.clone(),
-            effective_at: effective_at.clone(),
+            published_at: published_at,
+            effective_at: effective_at,
             tags: meta.tags.clone(),
             state: meta.state.clone(),
             ncm_scope: meta.ncm_scope.clone(),
             request_id: request_id.map(str::to_string),
             attempt: 0,
-            created_at: created_at.clone(),
+            created_at: created_at,
         };
 
         let mut queue = RedisQueueClient::new(&app_cfg.redis_url, &app_cfg.queue)
