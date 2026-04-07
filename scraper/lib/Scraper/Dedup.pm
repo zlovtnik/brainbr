@@ -6,9 +6,10 @@ use v5.30;
 
 use Carp qw(croak);
 use Digest::SHA qw(sha256_hex);
+use Encode qw(encode_utf8);
 
 sub new {
-  my ($class, %args) = @_;\
+  my ($class, %args) = @_;
 
   croak 'redis_db is required' unless $args{redis_db};
   my $default_ttl = 90 * 24 * 60 * 60;
@@ -36,7 +37,7 @@ sub inspect {
   croak 'source_id is required' unless defined $source_id && length $source_id;
   croak 'law_ref is required' unless defined $law_ref && length $law_ref;
 
-  my $digest = sha256_hex(join "\x1E", $law_ref, ($raw_content // q{}));
+  my $digest = sha256_hex(encode_utf8(join "\x1E", $law_ref, ($raw_content // q{})));
   my $set_key = "scraper:seen:$source_id";
   my $map_key = "scraper:seen:$source_id:law_ref";
 

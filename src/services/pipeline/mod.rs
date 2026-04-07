@@ -1,18 +1,18 @@
+use chrono::{DateTime, NaiveDate, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use chrono::{DateTime, Utc, NaiveDate};
 use sqlx::PgPool;
+use uuid::Uuid;
 
-use crate::api::middleware::error::AppError;
-use crate::config::ModelsConfig;
+use crate::api::middleware::{error::AppError, tenant::set_rls_session};
+use crate::config::{AppConfig, ModelsConfig};
+use crate::queue::RedisQueueClient;
 use crate::services::rag::RagService;
 
 /// Valid Brazilian state abbreviations (UF).
 const VALID_UF: &[&str] = &[
-    "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA",
-    "MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN",
-    "RS","RO","RR","SC","SP","SE","TO",
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR",
+    "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 ];
 
 /// Validated metadata extracted from an ingestion request body.
@@ -35,7 +35,8 @@ impl IngestionMetadata {
                 let upper = s.to_uppercase();
                 if !VALID_UF.contains(&upper.as_str()) {
                     return Err(AppError::BadRequest(format!(
-                        "state '{}' is not a valid Brazilian UF", s
+                        "state '{}' is not a valid Brazilian UF",
+                        s
                     )));
                 }
                 Some(upper)
@@ -52,12 +53,14 @@ impl IngestionMetadata {
                     })?;
                     if prefix.is_empty() || !prefix.chars().all(|c| c.is_ascii_digit()) {
                         return Err(AppError::BadRequest(format!(
-                            "ncm_scope entry '{}' must be a non-empty numeric string", prefix
+                            "ncm_scope entry '{}' must be a non-empty numeric string",
+                            prefix
                         )));
                     }
                     if prefix.len() > 8 {
                         return Err(AppError::BadRequest(format!(
-                            "ncm_scope entry '{}' exceeds 8 digits", prefix
+                            "ncm_scope entry '{}' exceeds 8 digits",
+                            prefix
                         )));
                     }
                     out.push(prefix.to_string());
@@ -68,10 +71,18 @@ impl IngestionMetadata {
 
         let tags = body["tags"]
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
 
-        Ok(Self { state, ncm_scope, tags })
+        Ok(Self {
+            state,
+            ncm_scope,
+            tags,
+        })
     }
 
     pub fn to_json(&self) -> serde_json::Value {
@@ -119,6 +130,7 @@ pub struct AuditJob {
     pub job_id: String,
     pub company_id: Uuid,
     pub sku_id: String,
+    pub requested_by: Option<String>,
     pub request_id: Option<String>,
     pub attempt: i32,
     pub created_at: DateTime<Utc>,
@@ -196,12 +208,20 @@ impl ReingestionService {
             let metadata: serde_json::Value = row.get("metadata");
             let tags: Vec<String> = metadata["tags"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let state: Option<String> = metadata["state"].as_str().map(String::from);
             let ncm_scope: Vec<String> = metadata["ncm_scope"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
 
             let job = IngestionJob {
@@ -229,7 +249,11 @@ impl ReingestionService {
 pub struct IngestionService;
 
 impl IngestionService {
-    pub async fn process_job(pool: &PgPool, cfg: &ModelsConfig, job: IngestionJob) -> anyhow::Result<()> {
+    pub async fn process_job(
+        pool: &PgPool,
+        cfg: &ModelsConfig,
+        job: IngestionJob,
+    ) -> anyhow::Result<()> {
         let raw = job.raw_content.as_deref().unwrap_or("");
         let chunks = chunk_text(raw, 1200, 120).map_err(|e| anyhow::anyhow!("{e:?}"))?;
         let content_hash = hash_content(raw);
@@ -237,7 +261,8 @@ impl IngestionService {
         // Embed before opening the transaction to avoid holding a DB connection
         // during an external API call.
         let chunk_refs: Vec<&str> = chunks.iter().map(|s| s.as_str()).collect();
-        let embeddings = RagService::embed_batch(cfg, &chunk_refs).await
+        let embeddings = RagService::embed_batch(cfg, &chunk_refs)
+            .await
             .map_err(|e| anyhow::anyhow!("embedding batch failed: {e}"))?;
         if embeddings.len() != chunks.len() {
             return Err(anyhow::anyhow!(
@@ -310,11 +335,13 @@ impl IngestionService {
         };
 
         // Remove stale chunks from previous versions that are beyond the new count
-        sqlx::query("DELETE FROM fiscal_knowledge_chunk WHERE knowledge_id = $1 AND chunk_index >= $2")
-            .bind(kb_id)
-            .bind(chunks.len() as i32)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "DELETE FROM fiscal_knowledge_chunk WHERE knowledge_id = $1 AND chunk_index >= $2",
+        )
+        .bind(kb_id)
+        .bind(chunks.len() as i32)
+        .execute(&mut *tx)
+        .await?;
 
         for (i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
             let vec_literal = to_vector_literal_f32(embedding);
@@ -355,37 +382,135 @@ impl IngestionService {
 
     pub async fn enqueue(
         pool: &PgPool,
+        app_cfg: &AppConfig,
         company_id: Uuid,
+        requested_by: Option<&str>,
         body: serde_json::Value,
         request_id: Option<&str>,
     ) -> Result<serde_json::Value, AppError> {
         let job_id = Uuid::new_v4();
-        let law_ref = body["law_ref"].as_str().ok_or_else(|| AppError::BadRequest("law_ref required".into()))?.to_string();
-        let law_type = body["law_type"].as_str().ok_or_else(|| AppError::BadRequest("law_type required".into()))?.to_string();
-        let source_url = body["source_url"].as_str().map(String::from);
-        let _raw_content = body["raw_content"].as_str().map(String::from);
+        let created_at = Utc::now();
+        let law_ref = required_trimmed_field(&body, "law_ref")?;
+        let law_type = required_trimmed_field(&body, "law_type")?;
+        let source_url = optional_trimmed_field(&body, "source_url");
+        let raw_content = optional_trimmed_field(&body, "raw_content")
+            .or_else(|| optional_trimmed_field(&body, "content"));
+        if source_url.is_none() && raw_content.is_none() {
+            return Err(AppError::BadRequest(
+                "Provide either source_url or raw_content/content".into(),
+            ));
+        }
+        let published_at = parse_optional_date(&body, "published_at")?;
+        let effective_at = parse_optional_date(&body, "effective_at")?;
         let meta = IngestionMetadata::from_body(&body)?;
+        let requested_by = requested_by.map(str::to_string);
 
-        sqlx::query(
-            r#"INSERT INTO fiscal_audit_log (company_id, sku_id, event_type, actor, request_id, event_payload)
-               VALUES ($1, 'ingestion', 'INGESTION_QUEUED', 'api', $2, $3::jsonb)"#
+        let job = IngestionJob {
+            job_id: job_id.to_string(),
+            company_id,
+            law_ref: law_ref.clone(),
+            law_type: law_type.clone(),
+            source_url: source_url.clone(),
+            raw_content: raw_content.clone(),
+            published_at: published_at,
+            effective_at: effective_at,
+            tags: meta.tags.clone(),
+            state: meta.state.clone(),
+            ncm_scope: meta.ncm_scope.clone(),
+            request_id: request_id.map(str::to_string),
+            attempt: 0,
+            created_at: created_at,
+        };
+
+        let mut queue = RedisQueueClient::new(&app_cfg.redis_url, &app_cfg.queue)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create Redis queue client for ingestion");
+                AppError::ServiceUnavailable("Unable to reach the ingestion queue".into())
+            })?;
+
+        let stream = queue.ingestion_stream.clone();
+        let message_id = match queue.enqueue(&stream, &job).await {
+            Ok(message_id) => message_id,
+            Err(e) => {
+                tracing::error!(
+                    job_id = %job_id,
+                    company_id = %company_id,
+                    law_ref = %law_ref,
+                    error = %e,
+                    "Failed to publish ingestion job to Redis"
+                );
+                let payload = serde_json::json!({
+                    "job_id": job_id,
+                    "law_ref": &law_ref,
+                    "law_type": &law_type,
+                    "queue_stream": &stream,
+                    "requested_by": requested_by.clone(),
+                    "source_url": source_url.clone(),
+                    "has_raw_content": raw_content.is_some(),
+                    "state": meta.state.clone(),
+                    "ncm_scope": meta.ncm_scope.clone(),
+                    "error": e.to_string(),
+                });
+                if let Err(log_err) = insert_audit_event(
+                    pool,
+                    company_id,
+                    "ingestion",
+                    "INGESTION_QUEUE_FAILED",
+                    request_id,
+                    payload,
+                )
+                .await
+                {
+                    tracing::error!(
+                        job_id = %job_id,
+                        company_id = %company_id,
+                        error = %log_err,
+                        "Failed to append ingestion queue failure audit log"
+                    );
+                }
+                return Err(AppError::ServiceUnavailable(
+                    "Unable to enqueue the ingestion job".into(),
+                ));
+            }
+        };
+
+        if let Err(log_err) = insert_audit_event(
+            pool,
+            company_id,
+            "ingestion",
+            "INGESTION_QUEUED",
+            request_id,
+            serde_json::json!({
+                "job_id": job_id,
+                "law_ref": &law_ref,
+                "law_type": &law_type,
+                "queue_stream": &stream,
+                "queue_message_id": message_id,
+                "requested_by": requested_by.clone(),
+                "source_url": source_url.clone(),
+                "has_raw_content": raw_content.is_some(),
+                "published_at": published_at.clone(),
+                "effective_at": effective_at.clone(),
+                "tags": meta.tags.clone(),
+                "state": meta.state.clone(),
+                "ncm_scope": meta.ncm_scope.clone(),
+            }),
         )
-        .bind(company_id)
-        .bind(request_id)
-        .bind(serde_json::json!({
-            "job_id": job_id,
-            "law_ref": law_ref,
-            "law_type": law_type,
-            "source_url": source_url,
-            "state": meta.state,
-            "ncm_scope": meta.ncm_scope,
-        }))
-        .execute(pool)
-        .await?;
+        .await
+        {
+            tracing::error!(
+                job_id = %job_id,
+                company_id = %company_id,
+                error = %log_err,
+                "Failed to append ingestion queued audit log after Redis publish"
+            );
+        }
 
         Ok(serde_json::json!({
             "job_id": job_id,
             "status": "queued",
+            "queued_at": created_at.to_rfc3339(),
             "law_ref": law_ref,
             "law_type": law_type,
             "company_id": company_id,
@@ -394,17 +519,77 @@ impl IngestionService {
     }
 }
 
+async fn insert_audit_event(
+    pool: &PgPool,
+    company_id: Uuid,
+    sku_id: &str,
+    event_type: &str,
+    request_id: Option<&str>,
+    event_payload: serde_json::Value,
+) -> Result<(), AppError> {
+    let mut tx = pool.begin().await?;
+    set_rls_session(&mut tx, company_id)
+        .await
+        .map_err(AppError::Database)?;
+    sqlx::query(
+        r#"INSERT INTO fiscal_audit_log (company_id, sku_id, event_type, actor, request_id, event_payload)
+           VALUES ($1, $2, $3, 'api', $4, $5::jsonb)"#,
+    )
+    .bind(company_id)
+    .bind(sku_id)
+    .bind(event_type)
+    .bind(request_id)
+    .bind(event_payload)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+fn required_trimmed_field(body: &serde_json::Value, field: &str) -> Result<String, AppError> {
+    optional_trimmed_field(body, field)
+        .ok_or_else(|| AppError::BadRequest(format!("{field} required")))
+}
+
+fn optional_trimmed_field(body: &serde_json::Value, field: &str) -> Option<String> {
+    body[field]
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(String::from)
+}
+
+fn parse_optional_date(
+    body: &serde_json::Value,
+    field: &str,
+) -> Result<Option<NaiveDate>, AppError> {
+    match optional_trimmed_field(body, field) {
+        None => Ok(None),
+        Some(value) => NaiveDate::parse_from_str(&value, "%Y-%m-%d")
+            .map(Some)
+            .map_err(|_| AppError::BadRequest(format!("{field} must be YYYY-MM-DD"))),
+    }
+}
+
 /// Ported from ChunkingService.kt
-pub fn chunk_text(content: &str, max_chunk_chars: usize, overlap_chars: usize) -> Result<Vec<String>, AppError> {
+pub fn chunk_text(
+    content: &str,
+    max_chunk_chars: usize,
+    overlap_chars: usize,
+) -> Result<Vec<String>, AppError> {
     if max_chunk_chars == 0 {
         return Err(AppError::BadRequest("max_chunk_chars must be > 0".into()));
     }
     if overlap_chars >= max_chunk_chars {
-        return Err(AppError::BadRequest("overlap_chars must be < max_chunk_chars".into()));
+        return Err(AppError::BadRequest(
+            "overlap_chars must be < max_chunk_chars".into(),
+        ));
     }
 
     let normalized = content.replace("\r\n", "\n").trim().to_string();
-    if normalized.is_empty() { return Ok(vec![]); }
+    if normalized.is_empty() {
+        return Ok(vec![]);
+    }
 
     let article_re = Regex::new(r"(?i)\bArt\.?\s+\d+[\w\-]*").unwrap();
     let blocks = split_on_articles(&normalized, &article_re);
@@ -417,19 +602,28 @@ pub fn chunk_text(content: &str, max_chunk_chars: usize, overlap_chars: usize) -
 
 fn split_on_articles(content: &str, re: &Regex) -> Vec<String> {
     let matches: Vec<_> = re.find_iter(content).collect();
-    if matches.is_empty() { return vec![content.to_string()]; }
+    if matches.is_empty() {
+        return vec![content.to_string()];
+    }
 
     let mut parts = Vec::new();
     let first_start = matches[0].start();
     if first_start > 0 {
         let pre = content[..first_start].trim();
-        if !pre.is_empty() { parts.push(pre.to_string()); }
+        if !pre.is_empty() {
+            parts.push(pre.to_string());
+        }
     }
     for (i, m) in matches.iter().enumerate() {
         let start = m.start();
-        let end = matches.get(i + 1).map(|n| n.start()).unwrap_or(content.len());
+        let end = matches
+            .get(i + 1)
+            .map(|n| n.start())
+            .unwrap_or(content.len());
         let piece = content[start..end].trim();
-        if !piece.is_empty() { parts.push(piece.to_string()); }
+        if !piece.is_empty() {
+            parts.push(piece.to_string());
+        }
     }
     parts
 }
@@ -444,26 +638,42 @@ fn split_with_overlap(text: &str, max: usize, overlap: usize) -> Vec<String> {
         let end = (start + max).min(len);
         let piece: String = chars[start..end].iter().collect();
         let piece = piece.trim().to_string();
-        if !piece.is_empty() { chunks.push(piece); }
-        if end >= len { break; }
-        start = if end > overlap { end - overlap } else { start + 1 };
+        if !piece.is_empty() {
+            chunks.push(piece);
+        }
+        if end >= len {
+            break;
+        }
+        start = if end > overlap {
+            end - overlap
+        } else {
+            start + 1
+        };
     }
     chunks
 }
 
 /// Ported from VectorUtils.kt
 pub fn to_vector_literal(values: &[f64]) -> String {
-    let inner = values.iter().map(|v| format!("{v:.10}")).collect::<Vec<_>>().join(",");
+    let inner = values
+        .iter()
+        .map(|v| format!("{v:.10}"))
+        .collect::<Vec<_>>()
+        .join(",");
     format!("[{inner}]")
 }
 
 pub fn to_vector_literal_f32(values: &[f32]) -> String {
-    let inner = values.iter().map(|v| format!("{v:.8}")).collect::<Vec<_>>().join(",");
+    let inner = values
+        .iter()
+        .map(|v| format!("{v:.8}"))
+        .collect::<Vec<_>>()
+        .join(",");
     format!("[{inner}]")
 }
 
 pub fn hash_content(input: &str) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     use unicode_normalization::UnicodeNormalization;
     let normalized: String = input.trim().nfkc().collect();
     let digest = Sha256::digest(normalized.as_bytes());
